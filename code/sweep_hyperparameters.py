@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -30,7 +29,7 @@ for fn in ["SimHei", "Microsoft YaHei"]:
         pass
 plt.rcParams["axes.unicode_minus"] = False
 
-SEEDS = (7, 13, 21, 42, 100)
+SEEDS = idsds.DEFAULT_SEEDS
 TRADES_BETAS = [1.0, 3.0, 6.0, 10.0, 15.0]
 CLASS_AWARE_WEIGHTS = [1.0, 2.0, 3.0, 5.0, 10.0]
 
@@ -109,26 +108,25 @@ def plot_sweep(df, param_name, param_label, output_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cpu")
-    parser.add_argument("--output-dir", default="outputs/sweep",
+    parser.add_argument("--output-dir", default=str(idsds.DEFAULT_OUTPUT_ROOT / "sweep"),
                         help="directory for the sweep tables and figures")
     args = parser.parse_args()
 
-    base_dir = Path(__file__).resolve().parent.parent
-    out_dir = Path(args.output_dir)
-    out_dir = out_dir if out_dir.is_absolute() else base_dir / out_dir
+    out_dir = idsds.resolve_path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
 
     config = idsds.ExperimentConfig(
-        train_path=str(base_dir / "data" / "train.csv"),
-        test_path=str(base_dir / "data" / "test.csv"),
+        train_path=str(idsds.DEFAULT_DATA_DIR / "train.csv"),
+        test_path=str(idsds.DEFAULT_DATA_DIR / "test.csv"),
         output_dir=str(out_dir),
         device=args.device,
     )
 
     train_df, test_df = idsds.load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = idsds.build_features(train_df, test_df)
-    eval_indices = idsds.stratified_subset_indices(y_test, config.eval_attack_rows, seed=2026)
+    eval_indices = idsds.stratified_subset_indices(y_test, config.eval_attack_rows,
+                                                   seed=config.eval_subset_seed)
     eval_x, eval_y = x_test[eval_indices], y_test[eval_indices]
 
     train_loader = idsds.make_dataloader(x_train, y_train, config.batch_size, shuffle=True)

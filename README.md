@@ -43,6 +43,9 @@ needed; every `python ...` example below is meant to be run the same way
 (`uv run python ...`). The interpreter is pinned by `.python-version` and uv installs it
 automatically when missing.
 
+All paths are resolved against the repository root, so every documented command can be
+started from any working directory.
+
 Run `uv run python run_experiments.py --dry-run` to see the exact commands without executing them.
 
 ---
@@ -150,6 +153,10 @@ run_summary.json          the complete configuration actually used
 risk_profile_4d.csv       the four-dimensional profile and the Pareto flag
 ```
 
+The attack applied to the test partition after training is configurable as well:
+`--full-test-attack-settings pgd:0.10` selects the attack and its budget, and
+`--full-test-attack-rows 0` (the default) attacks the complete partition.
+
 ### Worst-class recall (phi4), five seeds
 
 ```bash
@@ -191,7 +198,7 @@ The FT-Transformer dominates the total cost. All backbones also run on CPU, subs
 | Batch size | 1024 (MLP, 1D-CNN); 512 (FT-Transformer) |
 | Dropout | 0.15 |
 | Random seeds | 7, 13, 21, 42, 100 (set with --seeds) |
-| Evaluation subset | 20,000 stratified test samples, fixed seed 2026, shared by all defenses |
+| Evaluation subset | 20,000 stratified test samples (`--eval-attack-rows`), fixed seed 2026 (`--eval-subset-seed`), shared by all defenses |
 | **Adversarial training budget** | **epsilon = 0.06, alpha = 0.015, 20 steps** (FT-Transformer: 7 training steps) |
 | Evaluation budgets | epsilon in {0.02, 0.05, 0.10} |
 | Evaluation PGD steps | 20 (`--eval-pgd-steps`), independent of the training budget |
@@ -220,7 +227,7 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 
 **Every field of `ExperimentConfig` is a command-line flag.** The flags are generated from the
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
-`ExperimentConfig` automatically adds a flag. All 44 fields are exposed identically by all three
+`ExperimentConfig` automatically adds a flag. All 47 fields are exposed identically by all three
 backbone scripts.
 
 ```bash

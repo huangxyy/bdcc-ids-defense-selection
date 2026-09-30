@@ -9,7 +9,13 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict, dataclass
-from pathlib import Path
+
+#: Defaults shared by the CLI, the Pareto analysis and the auxiliary scripts, so
+#: the study protocol is defined in exactly one place.
+DEFAULT_SEEDS: tuple[int, ...] = (7, 13, 21, 42, 100)
+DEFAULT_EPSILON_LIST: tuple[float, ...] = (0.02, 0.05, 0.10)
+DEFAULT_EVAL_SUBSET_SEED: int = 2026
+DEFAULT_FULL_TEST_ATTACK_SETTINGS: tuple[tuple[str, float], ...] = (("pgd", 0.10),)
 
 
 @dataclass
@@ -28,19 +34,26 @@ class ExperimentConfig:
     hidden_dims: tuple[int, ...] = (128, 64, 32)
     dropout: float = 0.15
     eval_attack_rows: int = 20000
+    #: Seed of the fixed stratified evaluation subset, shared by every defense
+    #: and every backbone so the reported numbers are comparable.
+    eval_subset_seed: int = DEFAULT_EVAL_SUBSET_SEED
     # Adversarial training budget (PGD used to build the training examples).
     adv_epsilon: float = 0.06
     adv_alpha: float = 0.015
     adv_steps: int = 20
     # Evaluation budget.
-    epsilon_list: tuple[float, ...] = (0.02, 0.05, 0.10)
+    epsilon_list: tuple[float, ...] = DEFAULT_EPSILON_LIST
     eval_pgd_steps: int = 20
-    seeds: tuple[int, ...] = (7, 13, 21, 42, 100)
+    seeds: tuple[int, ...] = DEFAULT_SEEDS
     sensitivity_top_ratio: float = 0.3
     sensitivity_ratio_list: tuple[float, ...] = (0.2, 0.3, 0.4)
     sensitivity_batches: int = 16
     transfer_attack_settings: tuple[tuple[str, float], ...] = (("fgsm", 0.05), ("pgd", 0.1))
     validity_attack_settings: tuple[tuple[str, float], ...] = (("fgsm", 0.05), ("pgd", 0.1))
+    #: Attack applied to the (full) test partition after training; `rows` = 0
+    #: attacks the complete partition.
+    full_test_attack_settings: tuple[tuple[str, float], ...] = DEFAULT_FULL_TEST_ATTACK_SETTINGS
+    full_test_attack_rows: int = 0
     category_attack: str = "pgd"
     category_epsilon: float = 0.1
     ratio_attack: str = "pgd"
@@ -102,6 +115,7 @@ CONFIG_HELP: dict[str, str] = {
     "hidden_dims": "MLP hidden layer widths",
     "dropout": "dropout probability",
     "eval_attack_rows": "number of test rows used for the attack evaluation (stratified, shared by all defenses)",
+    "eval_subset_seed": "seed of the fixed stratified evaluation subset (shared by all defenses)",
     "adv_epsilon": "L-inf perturbation budget used DURING TRAINING (differs from the evaluation budgets)",
     "adv_alpha": "PGD step size used during training",
     "adv_steps": "PGD steps used during training",
@@ -113,6 +127,8 @@ CONFIG_HELP: dict[str, str] = {
     "sensitivity_batches": "mini-batches used to estimate feature sensitivity",
     "transfer_attack_settings": "attack:epsilon pairs used for the transferability matrix",
     "validity_attack_settings": "attack:epsilon pairs used for the attack-validity check",
+    "full_test_attack_settings": "attack:epsilon pairs applied to the full test partition after training",
+    "full_test_attack_rows": "rows of the test partition attacked at the end (0 = the whole partition)",
     "category_attack": "attack used for the per-category (worst-class) evaluation",
     "category_epsilon": "epsilon for the per-category evaluation",
     "ratio_attack": "attack used for the perturbation-ratio analysis",
@@ -142,12 +158,6 @@ CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "class_aware_minority_weight": ("--class-aware-weight",),
     "adv_steps": ("--train-adv-steps",),
 }
-
-
-def resolve_path(base_dir: Path, value: str) -> str:
-    """Resolve a command-line path against the repository root unless absolute."""
-    path = Path(value)
-    return str(path if path.is_absolute() else base_dir / path)
 
 
 def parse_bool(raw: str | bool) -> bool:

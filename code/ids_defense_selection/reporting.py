@@ -13,6 +13,7 @@ import pandas as pd
 from scipy import stats as scipy_stats
 
 from .config import ExperimentConfig
+from .style import get_color
 
 
 def plot_metric_curve(df: pd.DataFrame, metric: str, output_path: Path) -> None:
@@ -98,19 +99,13 @@ def plot_efficiency_tradeoff(efficiency_df: pd.DataFrame, result_df: pd.DataFram
     clean_df = result_df[result_df["attack"] == "clean"][["model", "f1"]].rename(columns={"f1": "clean_f1"})
     plot_df = efficiency_df.merge(robust_df, on="model").merge(clean_df, on="model")
 
-    colors = {
-        "standard": "#4472C4",
-        "adv_training": "#ED7D31",
-        "constrained_adv": "#70AD47",
-    }
-
     plt.figure(figsize=(7, 5))
     for row in plot_df.itertuples():
         plt.scatter(
             row.train_seconds,
             row.robust_f1,
             s=180,
-            color=colors.get(row.model, "#5B9BD5"),
+            color=get_color(row.model),
             alpha=0.9,
         )
         plt.annotate(

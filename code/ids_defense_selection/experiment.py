@@ -47,10 +47,6 @@ from .reporting import (
     summarize_results,
 )
 
-#: Seed of the fixed stratified evaluation subset shared by every defense/backbone.
-EVAL_SUBSET_SEED = 2026
-
-
 def run_mlp_experiment(config: ExperimentConfig) -> None:
     """Train and evaluate every defense on the MLP backbone. Writes all outputs."""
     output_dir = Path(config.output_dir)
@@ -65,7 +61,8 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     train_df, test_df = load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
 
-    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows, seed=EVAL_SUBSET_SEED)
+    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows,
+                                             seed=config.eval_subset_seed)
     eval_x = x_test[eval_indices]
     eval_y = y_test[eval_indices]
     eval_attack_categories, top_attack_categories = prepare_attack_categories(
@@ -348,9 +345,14 @@ def _write_mlp_outputs(
     plot_metric_curve(mean_df, "f1", output_dir / "f1_curve.png")
     plot_metric_curve(mean_df, "recall", output_dir / "recall_curve.png")
     plot_clean_f1_bar(mean_df, output_dir / "clean_f1_bar.png")
-    transfer_heatmap_df = transfer_mean_df[
-        (transfer_mean_df["attack"] == "pgd") & (np.isclose(transfer_mean_df["epsilon"], 0.1))]
-    plot_transfer_heatmap(transfer_heatmap_df, output_dir / "transfer_pgd_heatmap.png")
+    heatmap_setting = reference_transfer_setting(config)
+    if heatmap_setting is not None:
+        heatmap_attack, heatmap_epsilon = heatmap_setting
+        transfer_heatmap_df = transfer_mean_df[
+            (transfer_mean_df["attack"] == heatmap_attack)
+            & np.isclose(transfer_mean_df["epsilon"], heatmap_epsilon)]
+        plot_transfer_heatmap(transfer_heatmap_df,
+                              output_dir / f"transfer_{heatmap_attack}_heatmap.png")
     plot_ratio_ablation(ratio_mean_df, output_dir / "ratio_ablation.png")
     plot_efficiency_tradeoff(efficiency_mean_df, mean_df, output_dir / "efficiency_tradeoff.png")
     print("[mlp] aggregations and plots completed", flush=True)
@@ -395,3 +397,11 @@ def prepare_attack_categories(test_df: pd.DataFrame, eval_indices: np.ndarray,
         .index.tolist()
     )
     return categories, top
+
+
+def reference_transfer_setting(config: ExperimentConfig) -> tuple[str, float] | None:
+    """Transfer setting used for the heatmap: PGD if configured, else the last one."""
+    for attack, epsilon in config.transfer_attack_settings:
+        if attack == "pgd":
+            return attack, epsilon
+    return config.transfer_attack_settings[-1] if config.transfer_attack_settings else None

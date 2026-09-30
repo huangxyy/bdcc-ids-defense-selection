@@ -298,7 +298,7 @@ def evaluate_defenses(
     include_categories: bool = True,
     full_test_attack_settings: tuple[tuple[str, float], ...] = (),
     full_test_attack_rows: int = 0,
-    full_test_attack_seed: int = 2027,
+    full_test_attack_seed: int | None = None,
 ) -> EvaluationResults:
     """Run the full evaluation protocol over every trained defense candidate.
 
@@ -314,8 +314,10 @@ def evaluate_defenses(
     full_attack_rows: list[dict] = []
 
     if full_test_attack_rows > 0:
+        attack_seed = (config.eval_subset_seed + 1) if full_test_attack_seed is None \
+            else full_test_attack_seed
         full_indices = stratified_subset_indices(
-            eval_set.y_test, full_test_attack_rows, seed=full_test_attack_seed)
+            eval_set.y_test, full_test_attack_rows, seed=attack_seed)
         full_x = eval_set.x_test[full_indices]
         full_y = eval_set.y_test[full_indices]
         full_subset = "full_test_subset"

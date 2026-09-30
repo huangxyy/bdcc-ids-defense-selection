@@ -41,7 +41,7 @@ MODEL_ORDER = [
     "class_aware_constrained",
 ]
 
-FULL_TEST_ATTACK_SETTINGS = (("pgd", 0.10), ("apgd", 0.10))
+FULL_TEST_ATTACK_SETTINGS = idsds.DEFAULT_FULL_TEST_ATTACK_SETTINGS + (("apgd", 0.10),)
 
 
 @dataclass
@@ -65,10 +65,10 @@ class CICStrictExperimentConfig:
     adv_epsilon: float = 0.06
     adv_alpha: float = 0.015
     adv_steps: int = 20
-    epsilon_list: tuple[float, float, float] = (0.02, 0.05, 0.10)
+    epsilon_list: tuple[float, float, float] = idsds.DEFAULT_EPSILON_LIST
     eval_pgd_steps: int = 20
     eval_pgd_alpha_ratio: float = 0.05
-    seeds: tuple[int, ...] = (7, 13, 21, 42, 100)
+    seeds: tuple[int, ...] = idsds.DEFAULT_SEEDS
     sensitivity_top_ratio: float = 0.3
     sensitivity_batches: int = 16
     validity_attack_settings: tuple[tuple[str, float], ...] = (("fgsm", 0.05), ("pgd", 0.1))
@@ -660,10 +660,12 @@ def run_experiment(config: CICStrictExperimentConfig) -> None:
 
 # ---------------------------------------------------------------- CLI
 def parse_args() -> CICStrictExperimentConfig:
-# ------------------------------------------------------------------ CLI
     parser = argparse.ArgumentParser(description="Run strict source-disjoint CIC-IDS2017 adversarial experiments.")
-    parser.add_argument("--data-dir", default="data/cicids2017")
-    parser.add_argument("--output-dir", default="outputs/cicids2017_strict_matched_budget_run")
+    parser.add_argument("--data-dir", default=str(idsds.DEFAULT_DATA_DIR / "cicids2017"),
+                        help="directory with the daily CIC-IDS2017 csv files "
+                             "(relative paths resolve against the repository root)")
+    parser.add_argument("--output-dir",
+                        default=str(idsds.DEFAULT_OUTPUT_ROOT / "cicids2017_strict_matched_budget_run"))
     parser.add_argument("--blocks-per-day", type=int, default=10)
     parser.add_argument("--train-block-ratio", type=float, default=0.7)
     parser.add_argument("--batch-size", type=int, default=1024)
@@ -673,13 +675,13 @@ def parse_args() -> CICStrictExperimentConfig:
     parser.add_argument("--eval-attack-rows", type=int, default=30000)
     parser.add_argument("--full-test-attack-rows", type=int, default=0)
     parser.add_argument("--train-max-rows", type=int, default=300000)
-    parser.add_argument("--seeds", nargs="+", type=int, default=[7, 13, 21, 42, 100])
+    parser.add_argument("--seeds", nargs="+", type=int, default=list(idsds.DEFAULT_SEEDS))
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--rebuild-cache", action="store_true")
     args = parser.parse_args()
     return CICStrictExperimentConfig(
-        data_dir=args.data_dir,
-        output_dir=args.output_dir,
+        data_dir=str(idsds.resolve_path(args.data_dir)),
+        output_dir=str(idsds.resolve_path(args.output_dir)),
         blocks_per_day=args.blocks_per_day,
         train_block_ratio=args.train_block_ratio,
         batch_size=args.batch_size,

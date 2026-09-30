@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 
 from ids_defense_selection import style as FS
+from ids_defense_selection.config import DEFAULT_EPSILON_LIST
+from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -29,11 +31,10 @@ FS.apply_style()
 
 # Canonical output directories written by run_experiments.py (and the
 # CIC-IDS2017 script).  --outputs-root shifts the whole tree.
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKBONE_DIRS = {
-    "MLP": "mlp",
-    "CNN": "cnn1d",
-    "FT-Trans": "ft_transformer",
+    "MLP": BACKBONE_OUTPUT_SUBDIRS["mlp"],
+    "CNN": BACKBONE_OUTPUT_SUBDIRS["cnn"],
+    "FT-Trans": BACKBONE_OUTPUT_SUBDIRS["ft"],
     "CICIDS": "cicids2017_strict_matched_budget_run",
 }
 
@@ -143,6 +144,10 @@ def build_objective_matrix(data: dict, ref_attack: str,
     # Align on DEFENSE_ORDER; keep only models present in all phis
     models = [m for m in DEFENSE_ORDER if m in phi1.index and
               m in phi2.index and m in phi3.index]
+
+    if not models:
+        # e.g. the requested (attack, epsilon) is not part of the stored results
+        return pd.DataFrame(columns=["phi1", "phi2", "phi3", "phi4"]).rename_axis("model")
 
     rows = []
     for m in models:
@@ -348,10 +353,11 @@ def plot_risk_surface_heatmap(data_mlp: dict, data_cnn: dict,
 
 # ── Figure 3: Epsilon Pareto evolution (MLP only) ────────────────────────────
 
-EPSILON_LEVELS = [0.02, 0.05, 0.10]
+EPSILON_LEVELS = list(DEFAULT_EPSILON_LIST)
 EPS_STYLES = {0.02: ("o", "solid",  0.9),
               0.05: ("s", "dashed", 0.75),
               0.10: ("D", "dotted", 0.6)}
+DEFAULT_EPS_STYLE = ("o", "solid", 0.8)
 
 
 def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
@@ -369,7 +375,7 @@ def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
 
     legend_eps = []
     for eps in EPSILON_LEVELS:
-        mk, ls, alp = EPS_STYLES[eps]
+        mk, ls, alp = EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)
         phi2 = compute_phi2(mr, "pgd", eps)
         if phi2.empty:
             continue
@@ -421,8 +427,8 @@ def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
     # Epsilon style legend using Line2D proxies
     from matplotlib.lines import Line2D
     eps_handles = [
-        Line2D([0], [0], marker=EPS_STYLES[eps][0], color="0.4",
-               linestyle=EPS_STYLES[eps][1], linewidth=0.8,
+        Line2D([0], [0], marker=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[0], color="0.4",
+               linestyle=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[1], linewidth=0.8,
                markersize=5, label=f"$\\varepsilon$={eps:.2f}")
         for eps in EPSILON_LEVELS
     ]
@@ -570,7 +576,7 @@ def parse_args():
                    help="Reference attack for phi2/phi4 (default: pgd)")
     p.add_argument("--ref-epsilon",  type=float, default=0.10,
                    help="Reference epsilon (default: 0.10)")
-    p.add_argument("--outputs-root", default=os.path.join(PROJECT_ROOT, "outputs"),
+    p.add_argument("--outputs-root", default=str(DEFAULT_OUTPUT_ROOT),
                    help="root directory containing mlp/, cnn1d/, ft_transformer/ "
                         "(default: <repo>/outputs)")
     p.add_argument("--no-figs",      action="store_true",
@@ -601,6 +607,11 @@ def main() -> int:
     # ── Build objective matrices ──
     obj_mlp  = build_objective_matrix(data["MLP"],  ref_atk, ref_eps)
     obj_cnn  = build_objective_matrix(data["CNN"],  ref_atk, ref_eps)
+    for key, label, obj in (("MLP", "MLP", obj_mlp), ("CNN", "1D-CNN", obj_cnn)):
+        if obj.empty and data[key]:
+            print(f"  [warning] {label} results exist but contain no "
+                  f"attack={ref_atk!r} at epsilon={ref_eps:.2f}; "
+                  "check --ref-attack/--ref-epsilon against mean_results.csv")
 
     # ── Stdout summaries ──
     print_summary("MLP",  obj_mlp)

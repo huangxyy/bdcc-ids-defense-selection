@@ -7,12 +7,13 @@ from pathlib import Path
 import pytest
 
 from ids_defense_selection.config import (
+    DEFAULT_EVAL_SUBSET_SEED,
     ExperimentConfig,
     build_parser,
     config_from_args,
     parse_tuple_value,
-    resolve_path,
 )
+from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, default_output_dir, resolve_path
 
 
 def test_parse_tuple_value_scalar_kinds() -> None:
@@ -63,5 +64,31 @@ def test_train_adv_steps_alias_still_works() -> None:
 
 def test_resolve_path_keeps_absolute_paths(tmp_path: Path) -> None:
     absolute = tmp_path / "train.csv"
-    assert resolve_path(tmp_path, str(absolute)) == str(absolute)
-    assert resolve_path(tmp_path, "data/train.csv") == str(tmp_path / "data/train.csv")
+    assert resolve_path(absolute, base=tmp_path) == absolute
+    assert resolve_path("data/train.csv", base=tmp_path) == tmp_path / "data/train.csv"
+
+
+def test_default_output_dirs_follow_the_shared_layout(tmp_path: Path) -> None:
+    assert set(BACKBONE_OUTPUT_SUBDIRS) == {"mlp", "cnn", "ft"}
+    assert default_output_dir("mlp", root=tmp_path) == tmp_path / "mlp"
+    assert default_output_dir("cnn", root=tmp_path) == tmp_path / "cnn1d"
+    assert default_output_dir("ft", root=tmp_path) == tmp_path / "ft_transformer"
+
+
+def test_evaluation_subset_and_full_test_defaults_are_configurable() -> None:
+    config = ExperimentConfig(train_path="train.csv", test_path="test.csv")
+    assert config.eval_subset_seed == DEFAULT_EVAL_SUBSET_SEED
+    assert config.eval_subset_seed == 2026
+    assert config.full_test_attack_rows == 0
+    assert config.full_test_attack_settings == (("pgd", 0.10),)
+
+    parser = build_parser(require_paths=False)
+    args = parser.parse_args([
+        "--eval-subset-seed", "7",
+        "--full-test-attack-rows", "500",
+        "--full-test-attack-settings", "fgsm:0.05",
+    ])
+    overridden = config_from_args(args)
+    assert overridden.eval_subset_seed == 7
+    assert overridden.full_test_attack_rows == 500
+    assert overridden.full_test_attack_settings == (("fgsm", 0.05),)

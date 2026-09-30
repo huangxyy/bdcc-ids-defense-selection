@@ -25,6 +25,8 @@ import os
 import sys
 from pathlib import Path
 
+from ids_defense_selection.paths import DEFAULT_DATA_DIR, resolve_path
+
 TRAIN_ROWS = 175_341   # official UNSW-NB15 training partition
 TEST_ROWS = 82_332     # official UNSW-NB15 testing partition
 REQUIRED_COLUMNS = ("label", "attack_cat")
@@ -62,12 +64,14 @@ def check_partition(path: Path, expected: int, role: str) -> tuple[bool, int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", default="data", help="directory holding train.csv and test.csv")
+    ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR),
+                    help="directory holding train.csv and test.csv "
+                         "(relative paths resolve against the repository root)")
     ap.add_argument("--fix-swap", action="store_true",
                     help="if the two files are reversed, swap them back")
     args = ap.parse_args()
 
-    d = Path(args.data_dir)
+    d = resolve_path(args.data_dir)
     train, test = d / "train.csv", d / "test.csv"
 
     print("=" * 78)

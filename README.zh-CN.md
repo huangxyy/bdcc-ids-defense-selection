@@ -39,6 +39,8 @@ uv run python run_experiments.py --device cuda
 `uv run` 会在项目环境中执行命令，无需手动激活环境；下文所有 `python ...` 示例都应以同样方式运行
 （即 `uv run python ...`）。解释器版本由 `.python-version` 固定，缺失时 uv 会自动安装。
 
+所有路径都相对仓库根目录解析，因此下文的每条命令都可以在任意工作目录下执行。
+
 运行 `uv run python run_experiments.py --dry-run` 可以只查看将要执行的命令而不真正运行。
 
 ---
@@ -142,6 +144,9 @@ run_summary.json          实际使用的完整配置
 risk_profile_4d.csv       四维画像与帕累托标记
 ```
 
+训练结束后对整个测试集施加的攻击同样可配置：`--full-test-attack-settings pgd:0.10`
+指定攻击方式与预算，`--full-test-attack-rows 0`（默认）表示攻击完整测试集。
+
 ### 最差类别召回（phi4），五个随机种子
 
 ```bash
@@ -182,7 +187,7 @@ FT-Transformer 占总成本的绝大部分。所有骨干网络也能在 CPU 上
 | 批大小 | 1024（MLP、1D-CNN）；512（FT-Transformer） |
 | Dropout | 0.15 |
 | 随机种子 | 7、13、21、42、100（用 `--seeds` 设置） |
-| 评测子集 | 20,000 条分层测试样本，固定种子 2026，所有防御共享 |
+| 评测子集 | 20,000 条分层测试样本（`--eval-attack-rows`），固定种子 2026（`--eval-subset-seed`），所有防御共享 |
 | **对抗训练预算** | **epsilon = 0.06，alpha = 0.015，20 步**（FT-Transformer：训练 7 步） |
 | 评测扰动预算 | epsilon ∈ {0.02, 0.05, 0.10} |
 | 评测 PGD 步数 | 20（`--eval-pgd-steps`），与训练预算相互独立 |
@@ -209,7 +214,7 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 ## 完整参数化
 
 **`ExperimentConfig` 的每个字段都是一个命令行参数。** 参数由 dataclass 自动生成，因此 CLI
-不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 44 个字段在三个
+不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 47 个字段在三个
 骨干脚本中完全一致。
 
 ```bash

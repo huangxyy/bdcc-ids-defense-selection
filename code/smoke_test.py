@@ -42,9 +42,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ids_defense_selection as idsds                              # noqa: E402
 from ids_defense_selection import CNN1DBackbone      # noqa: E402
+from ids_defense_selection.paths import DEFAULT_DATA_DIR, resolve_path  # noqa: E402
+from prepare_data import REQUIRED_COLUMNS, TEST_ROWS, TRAIN_ROWS   # noqa: E402
 
-EXPECTED_DIM = 190          # 39 continuous + 151 one-hot, as reported in the paper
-EXPECTED_CONT = 39
+#: Feature counts reported in the manuscript (the official split yields a different
+#: one-hot width; see the "Notes on the feature space" section of the README).
+PAPER_TRANSFORMED_FEATURES = 190
+PAPER_CONTINUOUS_FEATURES = 39
 
 RESULTS: list[tuple[str, str, str]] = []   # (name, PASS/FAIL/SKIP, detail)
 
@@ -57,7 +61,8 @@ def check(name: str, status: str, detail: str = "") -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", default="data")
+    ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR),
+                    help="dataset directory (relative paths resolve against the repository root)")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--n-train", type=int, default=4000,
                     help="rows actually trained on in the check (the fit still uses the full set)")
@@ -67,7 +72,7 @@ def main() -> int:
 
     t0 = time.perf_counter()
     device = torch.device(args.device)
-    d = Path(args.data_dir)
+    d = resolve_path(args.data_dir)
     print("=" * 78)
     print("Smoke test -- backbone-conditioned Pareto analysis for IDS defenses")
     print("=" * 78)
@@ -83,13 +88,13 @@ def main() -> int:
     test_df = pd.read_csv(te_p)
     check("CSV load", "PASS",
           f"train {len(train_df):,} rows / test {len(test_df):,} rows  ({time.perf_counter()-t:.1f}s)")
-    check("required columns present", "PASS" if {"label", "attack_cat"}.issubset(train_df.columns) else "FAIL",
+    check("required columns present", "PASS" if set(REQUIRED_COLUMNS).issubset(train_df.columns) else "FAIL",
           f"{len(train_df.columns)} columns")
-    if len(train_df) != 175_341 or len(test_df) != 82_332:
+    if len(train_df) != TRAIN_ROWS or len(test_df) != TEST_ROWS:
         check("official split direction", "FAIL",
-              "expected 175,341 / 82,332 -- run 'python code/prepare_data.py'")
+              f"expected {TRAIN_ROWS:,} / {TEST_ROWS:,} -- run 'uv run python code/prepare_data.py'")
     else:
-        check("official split direction", "PASS", "175,341 train / 82,332 test")
+        check("official split direction", "PASS", f"{TRAIN_ROWS:,} train / {TEST_ROWS:,} test")
 
     # ---- 2. features ---------------------------------------------------
     print("\n2. Feature engineering (fitted on the full training partition)")
@@ -99,9 +104,11 @@ def main() -> int:
     # The one-hot width depends on how many categorical levels the TRAINING
     # partition contains, so it is a property of the split rather than a constant.
     # 39 continuous features is the invariant; the total is reported for reference.
-    check("continuous feature count", "PASS" if n_cont == EXPECTED_CONT else "FAIL",
-          f"{n_cont} continuous features (expected {EXPECTED_CONT})")
-    note = "" if n_dim == EXPECTED_DIM else f"  [note: the manuscript reports {EXPECTED_DIM}; this split yields {n_dim}]"
+    check("continuous feature count", "PASS" if n_cont == PAPER_CONTINUOUS_FEATURES else "FAIL",
+          f"{n_cont} continuous features (expected {PAPER_CONTINUOUS_FEATURES})")
+    note = ("" if n_dim == PAPER_TRANSFORMED_FEATURES
+            else f"  [note: the manuscript reports {PAPER_TRANSFORMED_FEATURES}; "
+                 f"this split yields {n_dim}]")
     check("transformed feature count", "PASS", f"{n_dim} one-hot + continuous{note}  ({time.perf_counter()-t:.1f}s)")
     check("no NaN in features", "PASS" if not (np.isnan(x_tr).any() or np.isnan(x_te).any()) else "FAIL")
 
