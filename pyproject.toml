@@ -7,7 +7,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
-    { name = "Xiyuan Huang", email = "huangxiyuan2020@qq.com" },
+    { name = "MX", email = "mx18782708114@163.com" },
 ]
 keywords = [
     "intrusion-detection",
@@ -27,6 +27,7 @@ dependencies = [
     "matplotlib>=3.8",
     # Dataset download helper (CIC-IDS2017)
     "requests>=2.31",
+    "pathlib>=1.0.1",
 ]
 
 # The repository is a collection of scripts, not an installable package:
