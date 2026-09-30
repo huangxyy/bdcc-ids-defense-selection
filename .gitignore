@@ -1,0 +1,29 @@
+# Data (download separately — see data/README.md)
+data/*.csv
+data/cicids2017/
+
+# Experiment outputs
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# LaTeX build artefacts
+*.aux
+*.log
+*.out
+*.synctex.gz
