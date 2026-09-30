@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -31,7 +30,7 @@ TEST_ROWS = 82_332     # official UNSW-NB15 testing partition
 REQUIRED_COLUMNS = ("label", "attack_cat")
 
 
-def count_rows(path: Path) -> int:
+def count_records(path: Path) -> int:
     """Number of data records (excluding the header). Streaming, so 200 MB is fine."""
     n = 0
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -40,17 +39,17 @@ def count_rows(path: Path) -> int:
     return max(0, n - 1)
 
 
-def read_header(path: Path) -> list[str]:
+def read_csv_header(path: Path) -> list[str]:
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         return [c.strip() for c in fh.readline().strip().split(",")]
 
 
-def report(path: Path, expected: int, role: str) -> tuple[bool, int]:
+def check_partition(path: Path, expected: int, role: str) -> tuple[bool, int]:
     if not path.exists():
         print(f"  [MISSING] {path}  (expected {expected:,} records -- the official {role} partition)")
         return False, -1
-    n = count_rows(path)
-    hdr = read_header(path)
+    n = count_records(path)
+    hdr = read_csv_header(path)
     ok = n == expected
     mark = "OK " if ok else "!! "
     print(f"  [{mark}] {path.name:<12} {n:>9,} records   (expected {expected:,} -- official {role})")
@@ -74,8 +73,8 @@ def main() -> int:
     print("=" * 78)
     print("Dataset check -- official UNSW-NB15 split")
     print("=" * 78)
-    ok_train, n_train = report(train, TRAIN_ROWS, "training")
-    ok_test, n_test = report(test, TEST_ROWS, "testing")
+    ok_train, n_train = check_partition(train, TRAIN_ROWS, "training")
+    ok_test, n_test = check_partition(test, TEST_ROWS, "testing")
     print()
 
     if n_train == TEST_ROWS and n_test == TRAIN_ROWS:
@@ -88,7 +87,7 @@ def main() -> int:
             os.replace(test, train)
             os.replace(tmp, test)
             print("\n  Swapped. Re-run this script to confirm.")
-            return main_check_only(d)
+            return verify_layout(d)
         print("\n  Re-run with --fix-swap to exchange them, or rename the files by hand.")
         return 1
 
@@ -96,8 +95,8 @@ def main() -> int:
         print("  Dataset layout is correct -- you can run the experiments.")
         print()
         print("  Next steps:")
-        print("    python code/smoke_test.py                          # ~1 minute sanity check")
-        print("    python run_experiments.py --device cuda            # full reproduction")
+        print("    uv run python code/smoke_test.py                   # ~1 minute sanity check")
+        print("    uv run python run_experiments.py --device cuda     # full reproduction")
         return 0
 
     print("  Dataset is not ready. Download UNSW-NB15 from")
@@ -109,9 +108,9 @@ def main() -> int:
     return 1
 
 
-def main_check_only(d: Path) -> int:
-    ok_t, n_t = report(d / "train.csv", TRAIN_ROWS, "training")
-    ok_e, n_e = report(d / "test.csv", TEST_ROWS, "testing")
+def verify_layout(d: Path) -> int:
+    ok_t, n_t = check_partition(d / "train.csv", TRAIN_ROWS, "training")
+    ok_e, n_e = check_partition(d / "test.csv", TEST_ROWS, "testing")
     return 0 if (ok_t and ok_e) else 1
 
 

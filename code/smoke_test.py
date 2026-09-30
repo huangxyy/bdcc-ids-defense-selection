@@ -40,9 +40,8 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ids_core as base                              # noqa: E402
-from backbone_cnn1d import CNN1D                     # noqa: E402
-from backbone_ft_transformer import FTTransformer    # noqa: E402
+import ids_defense_selection as idsds                              # noqa: E402
+from ids_defense_selection import CNN1DBackbone      # noqa: E402
 
 EXPECTED_DIM = 190          # 39 continuous + 151 one-hot, as reported in the paper
 EXPECTED_CONT = 39
@@ -88,14 +87,14 @@ def main() -> int:
           f"{len(train_df.columns)} columns")
     if len(train_df) != 175_341 or len(test_df) != 82_332:
         check("official split direction", "FAIL",
-              f"expected 175,341 / 82,332 -- run 'python code/prepare_data.py'")
+              "expected 175,341 / 82,332 -- run 'python code/prepare_data.py'")
     else:
         check("official split direction", "PASS", "175,341 train / 82,332 test")
 
     # ---- 2. features ---------------------------------------------------
     print("\n2. Feature engineering (fitted on the full training partition)")
     t = time.perf_counter()
-    x_tr, y_tr, x_te, y_te, meta = base.build_features(train_df, test_df)
+    x_tr, y_tr, x_te, y_te, meta = idsds.build_features(train_df, test_df)
     n_dim, n_cont = x_tr.shape[1], int(meta["numeric_mask"].sum())
     # The one-hot width depends on how many categorical levels the TRAINING
     # partition contains, so it is a property of the split rather than a constant.
@@ -109,9 +108,9 @@ def main() -> int:
     # ---- 3. backbones --------------------------------------------------
     print("\n3. Backbones")
     models = {
-        "MLP": base.MLP(n_dim, (128, 64, 32), 0.15),
-        "1D-CNN": CNN1D(n_dim, 0.15),
-        "FT-Transformer": FTTransformer(n_dim, 32, 2, 2, 64, 0.15),
+        "MLP": idsds.MLPBackbone(n_dim, (128, 64, 32), 0.15),
+        "1D-CNN": CNN1DBackbone(n_dim, 0.15),
+        "FT-Transformer": idsds.build_ft_transformer(n_dim, 0.15),
     }
     xb = torch.from_numpy(np.ascontiguousarray(x_te[:64])).float().to(device)
     for nm, m in models.items():
@@ -133,7 +132,7 @@ def main() -> int:
     xb = torch.from_numpy(np.ascontiguousarray(x_te[:n])).float().to(device)
     yb = torch.from_numpy(np.ascontiguousarray(y_te[:n])).float().to(device)
     eps = 0.05
-    x_adv = base.pgd_attack(model, xb, yb, eps, eps / 10.0, 10, mask_t, mins_t, maxs_t)
+    x_adv = idsds.pgd_attack(model, xb, yb, eps, eps / 10.0, 10, mask_t, mins_t, maxs_t)
     delta = (x_adv - xb).abs()
 
     check("one-hot features untouched", "PASS" if float(delta[:, n_cont:].max()) == 0.0 else "FAIL",
@@ -146,7 +145,7 @@ def main() -> int:
     # When constraint (ii) (stay inside the observed range) and constraint (iii)
     # (||delta||_inf <= eps) conflict, clamp_numeric resolves in favour of (ii),
     # so a sample can move by more than eps without the attacker doing anything.
-    x_proj = base.clamp_numeric(xb.clone(), xb, mins_t, maxs_t, mask_t)
+    x_proj = idsds.clamp_numeric(xb.clone(), xb, mins_t, maxs_t, mask_t)
     proj_delta = (x_proj - xb).abs()[:, :n_cont].max(dim=1).values
     att_delta = delta[:, :n_cont].max(dim=1).values
     n_proj_over = int((proj_delta > eps + 1e-6).sum())
@@ -160,15 +159,15 @@ def main() -> int:
           "PASS" if n_proj_over == 0 else "SKIP",
           f"max = {float(proj_delta.max()):.5f}; {n_proj_over}/{n} samples moved > eps "
           f"by the box projection alone  (constraint (ii) takes precedence over (iii))")
-    n_oor, frac_oor = base.count_out_of_range(x_te[:n], meta["numeric_mins"], meta["numeric_maxs"])
-    mv = base.max_violation(x_te[:n], meta["numeric_mins"], meta["numeric_maxs"])
+    n_oor, frac_oor = idsds.count_out_of_range(x_te[:n], meta["numeric_mins"], meta["numeric_maxs"])
+    mv = idsds.max_violation(x_te[:n], meta["numeric_mins"], meta["numeric_maxs"])
     check("out-of-range diagnostics", "PASS",
           f"{n_oor}/{n} samples leave the training box (tolerance 1e-4); "
           f"largest excursion = {mv:.2e}")
 
     # ---- 5. projection helpers -----------------------------------------
     print("\n5. Projection helpers")
-    cl = base.clamp_numeric(x_adv.clone(), xb, mins_t, maxs_t, mask_t)
+    cl = idsds.clamp_numeric(x_adv.clone(), xb, mins_t, maxs_t, mask_t)
     in_box = bool((cl[:, :n_cont] <= maxs_t + 1e-6).all() and (cl[:, :n_cont] >= mins_t - 1e-6).all())
     check("clamp_numeric keeps values inside [mins, maxs]", "PASS" if in_box else "FAIL")
     check("count_out_of_range returns a fraction in [0,1]",
@@ -180,7 +179,7 @@ def main() -> int:
     with torch.no_grad():
         prob = torch.sigmoid(model(xb)).cpu().numpy()
     pred = (prob >= 0.5).astype(np.int32)
-    m = base.compute_metrics(y_te[:n].astype(np.int32), prob, clean_pred=pred)
+    m = idsds.classification_metrics(y_te[:n].astype(np.int32), prob, clean_pred=pred)
     keys_ok = {"accuracy", "precision", "recall", "f1", "auc", "attack_success_rate"}.issubset(m)
     check("compute_metrics returns the expected keys", "PASS" if keys_ok else "FAIL",
           "(values are meaningless here -- the model is untrained)")
@@ -188,7 +187,7 @@ def main() -> int:
     # ---- 7. adaptive helpers -------------------------------------------
     print("\n7. Adaptive attack helpers")
     try:
-        import adaptive_attacks as AA
+        from ids_defense_selection import adaptive as AA
         xs = xb[:64].detach().clone()
         ys = yb[:64].detach().clone()
         xa = AA.pgd_adaptive(model, xs, ys, eps, mask_t, mins_t, maxs_t,
@@ -213,7 +212,7 @@ def main() -> int:
         print("  Environment and data are ready.")
         if nskip:
             print("  (SKIP entries are informational, not failures.)")
-        print("  Next:  python run_experiments.py --device cuda")
+        print("  Next:  uv run python run_experiments.py --device cuda")
     else:
         print("  Fix the failures above before starting the full experiments.")
     print("=" * 78)

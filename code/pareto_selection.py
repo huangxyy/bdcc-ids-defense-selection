@@ -12,7 +12,6 @@ Usage:
 
 import argparse
 import os
-import sys
 import warnings
 
 import matplotlib
@@ -22,26 +21,23 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
+from ids_defense_selection import style as FS
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# ── Path setup ──────────────────────────────────────────────────────────────
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, SCRIPT_DIR)
-
-import plot_style as FS
 FS.apply_style()
 
-BASE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "outputs")
-DIRS = {
-    "MLP":    os.path.join(BASE_ROOT, "v2_matched_budget_run"),
-    "CNN":    os.path.join(BASE_ROOT, "cnn1d_matched_budget_run"),
-    "FT-Trans": os.path.join(BASE_ROOT, "ft_transformer_matched_budget_run"),
-    "ft_transformer": os.path.join(BASE_ROOT, "ft_transformer_matched_budget_run"),
-    "CICIDS": os.path.join(BASE_ROOT, "cicids2017_strict_matched_budget_run"),
+# Canonical output directories written by run_experiments.py (and the
+# CIC-IDS2017 script).  --outputs-root shifts the whole tree.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKBONE_DIRS = {
+    "MLP": "mlp",
+    "CNN": "cnn1d",
+    "FT-Trans": "ft_transformer",
+    "CICIDS": "cicids2017_strict_matched_budget_run",
 }
-FIG_DIR  = os.path.join(BASE_ROOT, "figures")
 
-DEFENSE_ORDER = FS.MODEL_ORDER  # 6 defenses in canonical order
+DEFENSE_ORDER = FS.DEFENSE_ORDER  # 6 defenses in canonical order
 
 # Theta presets: (w1_clean, w2_resilience, w3_cost, w4_fairness)
 THETA_PRESETS = {
@@ -64,9 +60,9 @@ def _load_csv_safe(path: str) -> pd.DataFrame | None:
     return None
 
 
-def load_backbone_data(backbone: str) -> dict:
+def load_backbone_data(backbone: str, dirs: dict[str, str]) -> dict:
     """Load all relevant CSVs for a given backbone key."""
-    d = DIRS.get(backbone)
+    d = dirs.get(backbone)
     if d is None or not os.path.isdir(d):
         return {}
     data = {}
@@ -559,7 +555,7 @@ def print_summary(backbone: str, obj: pd.DataFrame) -> None:
     print(f"\n  Pareto-optimal defenses: "
           f"{', '.join(FS.get_label(m) for m, ok in zip(models, pareto) if ok)}")
 
-    print(f"\n  Defense selection by theta preset:")
+    print("\n  Defense selection by theta preset:")
     for name, theta in list(THETA_PRESETS.items())[:3]:   # show top 3
         sel = select_defense(mat, models, theta)
         print(f"    theta_{name:<12} -> {FS.get_label(sel)}")
@@ -574,21 +570,33 @@ def parse_args():
                    help="Reference attack for phi2/phi4 (default: pgd)")
     p.add_argument("--ref-epsilon",  type=float, default=0.10,
                    help="Reference epsilon (default: 0.10)")
+    p.add_argument("--outputs-root", default=os.path.join(PROJECT_ROOT, "outputs"),
+                   help="root directory containing mlp/, cnn1d/, ft_transformer/ "
+                        "(default: <repo>/outputs)")
     p.add_argument("--no-figs",      action="store_true",
                    help="Skip figure generation")
     return p.parse_args()
 
 
-def main():
+def main() -> int:
     args = parse_args()
     ref_atk = args.ref_attack
     ref_eps = args.ref_epsilon
-
-    os.makedirs(FIG_DIR, exist_ok=True)
+    dirs = {key: os.path.join(args.outputs_root, sub) for key, sub in BACKBONE_DIRS.items()}
+    fig_dir = os.path.join(args.outputs_root, "figures")
+    os.makedirs(fig_dir, exist_ok=True)
 
     # ── Load data ──
     print(f"\nLoading data  (ref: {ref_atk}, eps={ref_eps:.2f})")
-    data = {k: load_backbone_data(k) for k in ("MLP", "CNN", "CICIDS")}
+    data = {k: load_backbone_data(k, dirs) for k in ("MLP", "CNN", "CICIDS")}
+    missing = [k for k in ("MLP", "CNN") if not data[k]]
+    if missing:
+        for key in missing:
+            print(f"  [missing] {dirs[key]}/mean_results.csv -- "
+                  f"run 'uv run python run_experiments.py --backbones {key.lower()}' first")
+        if len(missing) == len(("MLP", "CNN")):
+            print("\nNo backbone results found; nothing to analyse.")
+            return 1
 
     # ── Build objective matrices ──
     obj_mlp  = build_objective_matrix(data["MLP"],  ref_atk, ref_eps)
@@ -601,8 +609,8 @@ def main():
     # ── CSV outputs ──
     print("\nWriting CSV tables...")
     for backbone, obj, base_dir in [
-        ("MLP",    obj_mlp,  DIRS["MLP"]),
-        ("CNN",    obj_cnn,  DIRS["CNN"]),
+        ("MLP",    obj_mlp,  dirs["MLP"]),
+        ("CNN",    obj_cnn,  dirs["CNN"]),
     ]:
         if obj.empty:
             continue
@@ -612,34 +620,37 @@ def main():
             obj, pareto,
             os.path.join(base_dir, "risk_profile_4d.csv"))
 
-    sel_csv = os.path.join(DIRS["MLP"], "pareto_selection_results.csv")
-    write_selection_csv(obj_mlp, obj_cnn, sel_csv)
+    target_dir = dirs["MLP"] if not obj_mlp.empty else dirs["CNN"]
+    os.makedirs(target_dir, exist_ok=True)
+    write_selection_csv(obj_mlp, obj_cnn,
+                        os.path.join(target_dir, "pareto_selection_results.csv"))
 
     if args.no_figs:
         print("\nFigure generation skipped (--no-figs).")
-        return
+        return 0
 
     # ── Figures ──
     print("\nGenerating figures...")
 
     plot_pareto_front_comparison(
         obj_mlp, obj_cnn,
-        os.path.join(FIG_DIR, "pareto_front_comparison.png"))
+        os.path.join(fig_dir, "pareto_front_comparison.png"))
 
     plot_risk_surface_heatmap(
         data["MLP"], data["CNN"],
-        os.path.join(FIG_DIR, "risk_surface_heatmap.png"))
+        os.path.join(fig_dir, "risk_surface_heatmap.png"))
 
     plot_epsilon_pareto_evolution(
         data["MLP"],
-        os.path.join(FIG_DIR, "epsilon_pareto_evolution.png"))
+        os.path.join(fig_dir, "epsilon_pareto_evolution.png"))
 
     plot_theta_sensitivity(
         obj_mlp, obj_cnn,
-        os.path.join(FIG_DIR, "theta_sensitivity.png"))
+        os.path.join(fig_dir, "theta_sensitivity.png"))
 
     print("\nDone.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

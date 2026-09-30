@@ -1,0 +1,54 @@
+[project]
+name = "bdcc-ids-defense-selection"
+version = "0.0.0"
+description = "Reference implementation and evaluation code for \"A Backbone-Conditioned Pareto Analysis Framework for Preference-Aware IDS Defense Selection\""
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [
+    { name = "Xiyuan Huang", email = "huangxiyuan2020@qq.com" },
+]
+keywords = [
+    "intrusion-detection",
+    "adversarial-robustness",
+    "pareto-optimization",
+    "unsw-nb15",
+]
+dependencies = [
+    # Core
+    "numpy>=2.0",
+    "pandas>=2.0",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    # Deep learning
+    "torch>=2.0",
+    # Plotting
+    "matplotlib>=3.8",
+    # Dataset download helper (CIC-IDS2017)
+    "requests>=2.31",
+]
+
+# The repository is a collection of scripts, not an installable package:
+# uv manages the environment and the lockfile, `uv sync` does not build the project.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["code"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Correctness rules: syntax/undefined-name errors (E9, F) plus the import and
+# statement checks that catch real breakage. Style rules are intentionally off.
+select = ["E4", "E7", "E9", "F"]

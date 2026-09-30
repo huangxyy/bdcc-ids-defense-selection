@@ -1,0 +1,8 @@
+# Normalise every text file to LF so the repository stays consistent
+# regardless of the contributor's operating system.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.pdf binary
+*.jpg binary

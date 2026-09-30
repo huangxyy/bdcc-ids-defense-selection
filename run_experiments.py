@@ -26,19 +26,19 @@ CODE = ROOT / "code"
 
 BACKBONES = {
     "mlp": {
-        "script": "ids_core.py",
+        "script": "run_mlp.py",
         "out": "outputs/mlp",
         "extra": [],
         "note": "MLP backbone (128-64-32)",
     },
     "cnn": {
-        "script": "backbone_cnn1d.py",
+        "script": "run_cnn1d.py",
         "out": "outputs/cnn1d",
         "extra": [],
         "note": "1D-CNN backbone",
     },
     "ft": {
-        "script": "backbone_ft_transformer.py",
+        "script": "run_ft_transformer.py",
         "out": "outputs/ft_transformer",
         "extra": [],
         "note": "FT-Transformer backbone (slowest: allow several hours per seed)",
@@ -83,10 +83,13 @@ def main() -> int:
 
     # Step 0: dataset layout. Never start a multi-hour run on a reversed split.
     print("-- step 0: dataset check " + "-" * 46)
-    rc = subprocess.call([sys.executable, str(CODE / "prepare_data.py"), "--data-dir", args.data_dir])
-    if rc != 0:
-        print("\nDataset is not ready. Fix it and re-run.")
-        return rc
+    if args.dry_run:
+        print("   (dry run -- dataset check skipped)")
+    else:
+        rc = subprocess.call([sys.executable, str(CODE / "prepare_data.py"), "--data-dir", args.data_dir])
+        if rc != 0:
+            print("\nDataset is not ready. Fix it and re-run.")
+            return rc
     print()
 
     t_all = time.perf_counter()
@@ -119,9 +122,9 @@ def main() -> int:
         print(f"  {key:<5} {dt/60:>7.1f} min   {out}/")
     print()
     print("Next steps")
-    print("  python code/eval_worst_class_recall_cnn_5seed.py --device cuda --out-dir outputs/phi4_cnn")
-    print("  python code/eval_worst_class_recall_ft_5seed.py  --device cuda --out-dir outputs/phi4_ft")
-    print("  python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10")
+    print("  uv run python code/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn")
+    print("  uv run python code/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft")
+    print("  uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10")
     print("=" * 78)
     return 0
 
