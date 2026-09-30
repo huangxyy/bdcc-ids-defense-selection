@@ -1,5 +1,7 @@
 # Data
 
+**English** | [简体中文](README.zh-CN.md)
+
 The datasets are **not** included in this repository. Download them and place the files here.
 
 ## UNSW-NB15 (required)

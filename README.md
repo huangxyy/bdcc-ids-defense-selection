@@ -1,6 +1,8 @@
 # A Backbone-Conditioned Pareto Analysis Framework
 ## for Preference-Aware IDS Defense Selection
 
+**English** | [简体中文](README.zh-CN.md)
+
 Reference implementation and evaluation code for the paper:
 
 > **A Backbone-Conditioned Pareto Analysis Framework for Preference-Aware IDS Defense Selection**  
@@ -64,7 +66,8 @@ checking, which silently reverses the split. `code/prepare_data.py` detects that
 uv run python code/prepare_data.py --fix-swap
 ```
 
-CIC-IDS2017 is optional and only needed by the cross-dataset scripts; see `data/README.md`.
+CIC-IDS2017 is optional and only needed by the cross-dataset scripts; see `data/README.md`
+(also available in [简体中文](data/README.zh-CN.md)).
 
 ---
 
