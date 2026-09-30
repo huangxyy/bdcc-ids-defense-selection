@@ -107,14 +107,16 @@ def plot_sweep(df, param_name, param_label, output_path):
 # ---------------------------------------------------------------- sweep driver
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--output-dir", default=str(idsds.DEFAULT_OUTPUT_ROOT / "sweep"),
                         help="directory for the sweep tables and figures")
     args = parser.parse_args()
 
     out_dir = idsds.resolve_path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(args.device)
+    device = idsds.resolve_device(args.device)
+    idsds.log_device(args.device, device)
 
     config = idsds.ExperimentConfig(
         train_path=str(idsds.DEFAULT_DATA_DIR / "train.csv"),

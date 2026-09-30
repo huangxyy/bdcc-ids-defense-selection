@@ -35,7 +35,7 @@ uv run python code/prepare_data.py
 uv run python code/smoke_test.py
 
 # 3. the full reproduction
-uv run python run_experiments.py --device cuda
+uv run python run_experiments.py
 ```
 
 `uv run` executes the command inside the project environment, so no manual activation is
@@ -97,6 +97,7 @@ bdcc-ids-defense-selection/
 │   │   └── style.py                          # shared matplotlib style + palette
 │   ├── prepare_data.py                       # validate / repair the dataset layout
 │   ├── smoke_test.py                         # fast end-to-end sanity check
+│   ├── check_devices.py                      # CPU / CUDA / MPS availability report
 │   ├── run_mlp.py                            # MLP experiment
 │   ├── run_cnn1d.py                          # 1D-CNN experiment
 │   ├── run_ft_transformer.py                 # FT-Transformer experiment
@@ -130,6 +131,20 @@ reported tables. The adaptive attack suite lives in
 ---
 
 ## Running the experiments
+
+### Device selection
+
+`--device` accepts `auto` (the default), `cpu`, `cuda`, `cuda:N` and `mps`. `auto` picks CUDA
+when a GPU is visible, then Apple MPS, then CPU; an explicit `cuda` request on a CPU-only
+machine fails immediately with a clear message instead of a deep torch error. The resolved
+device is printed at startup and recorded as `resolved_device` in `run_summary.json`.
+
+```bash
+uv run python code/check_devices.py                  # inspect CPU / CUDA / MPS
+uv run python run_experiments.py                     # auto-selects the device
+uv run python code/run_mlp.py --device cpu           # pin CPU
+uv run python code/run_mlp.py --device cuda:1        # pin a specific GPU
+```
 
 ### Full pipeline
 
@@ -202,6 +217,7 @@ The FT-Transformer dominates the total cost. All backbones also run on CPU, subs
 | **Adversarial training budget** | **epsilon = 0.06, alpha = 0.015, 20 steps** (FT-Transformer: 7 training steps) |
 | Evaluation budgets | epsilon in {0.02, 0.05, 0.10} |
 | Evaluation PGD steps | 20 (`--eval-pgd-steps`), independent of the training budget |
+| Device | `auto` (CUDA → MPS → CPU); pin with `--device cpu`, `cuda` or `cuda:N` |
 
 | Defense | Training-time attack | Mask | Extra |
 |---|---|---|---|
@@ -229,6 +245,11 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
 `ExperimentConfig` automatically adds a flag. All 47 fields are exposed identically by all three
 backbone scripts.
+
+Each field also carries its own help text and legacy flag aliases as dataclass metadata, and the
+values are validated as soon as the configuration is built: a typo such as `--batch-size 0`, an
+unknown attack name or a malformed tuple fails immediately with one readable message that lists
+every problem found.
 
 ```bash
 uv run python code/run_cnn1d.py --help              # the full list, with defaults

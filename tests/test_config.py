@@ -11,6 +11,7 @@ from ids_defense_selection.config import (
     ExperimentConfig,
     build_parser,
     config_from_args,
+    field_help,
     parse_tuple_value,
 )
 from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, default_output_dir, resolve_path
@@ -92,3 +93,71 @@ def test_evaluation_subset_and_full_test_defaults_are_configurable() -> None:
     assert overridden.eval_subset_seed == 7
     assert overridden.full_test_attack_rows == 500
     assert overridden.full_test_attack_settings == (("fgsm", 0.05),)
+
+
+def test_every_field_has_help_text_and_a_flag() -> None:
+    parser = build_parser(require_paths=False)
+    for name in ExperimentConfig.__dataclass_fields__:
+        assert field_help(name), f"{name} has no help text in its metadata"
+    # every field except the two dataset paths is exposed as a config flag
+    args = parser.parse_args([])
+    for name in ExperimentConfig.__dataclass_fields__:
+        assert hasattr(args, name), f"missing CLI flag for {name}"
+
+
+def test_values_are_normalised_on_construction() -> None:
+    config = ExperimentConfig(
+        train_path="train.csv",
+        test_path="test.csv",
+        device="  CUDA  ",
+        training_budget_mode="MATCHED_CONTINUATION",
+        seeds=[1, 2],
+        epsilon_list=[0.05],
+        transfer_attack_settings=[["fgsm", 0.05]],
+    )
+    assert config.device == "cuda"
+    assert config.training_budget_mode == "matched_continuation"
+    assert config.seeds == (1, 2)
+    assert config.epsilon_list == (0.05,)
+    assert config.transfer_attack_settings == (("fgsm", 0.05),)
+
+
+@pytest.mark.parametrize("overrides, message", [
+    ({"batch_size": 0}, "batch_size"),
+    ({"dropout": 1.0}, "dropout"),
+    ({"hidden_dims": (128, 64)}, "hidden_dims"),
+    ({"adv_steps": 0}, "adv_steps"),
+    ({"epsilon_list": ()}, "epsilon_list"),
+    ({"seeds": ()}, "seeds"),
+    ({"sensitivity_top_ratio": 0.0}, "sensitivity_top_ratio"),
+    ({"training_budget_mode": "turbo"}, "training_budget_mode"),
+    ({"category_attack": "quantum"}, "category_attack"),
+    ({"extra_methods": ("unknown_method",)}, "extra_methods"),
+    ({"transfer_attack_settings": (("fgsm", 0.0),)}, "transfer_attack_settings"),
+])
+def test_invalid_values_fail_fast(overrides: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        ExperimentConfig(train_path="train.csv", test_path="test.csv", **overrides)
+
+
+def test_validation_reports_every_problem_at_once() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        ExperimentConfig(train_path="", test_path="test.csv", batch_size=0, adv_steps=0)
+    text = str(excinfo.value)
+    assert "train_path" in text and "batch_size" in text and "adv_steps" in text
+
+
+def test_cli_tuple_typos_are_reported_as_argument_errors() -> None:
+    parser = build_parser(require_paths=False)
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--seeds", "1,abc"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--transfer-attack-settings", "fgsm"])
+
+
+def test_config_from_args_reports_validation_errors_cleanly() -> None:
+    parser = build_parser(require_paths=False)
+    args = parser.parse_args(["--batch-size", "0"])
+    with pytest.raises(SystemExit) as excinfo:
+        config_from_args(args)
+    assert "batch_size" in str(excinfo.value)

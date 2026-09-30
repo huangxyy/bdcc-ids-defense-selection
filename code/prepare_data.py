@@ -100,7 +100,7 @@ def main() -> int:
         print()
         print("  Next steps:")
         print("    uv run python code/smoke_test.py                   # ~1 minute sanity check")
-        print("    uv run python run_experiments.py --device cuda     # full reproduction")
+        print("    uv run python run_experiments.py                   # full reproduction (--device auto)")
         return 0
 
     print("  Dataset is not ready. Download UNSW-NB15 from")

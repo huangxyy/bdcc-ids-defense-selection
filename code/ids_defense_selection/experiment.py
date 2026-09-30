@@ -28,6 +28,7 @@ from .data import (
     stratified_subset_indices,
 )
 from .defenses import compute_sensitivity_mask, fit_reference_models, fit_supervised, train_all_defenses
+from .device import log_device, resolve_device
 from .evaluation import (
     EvaluationSet,
     classification_metrics,
@@ -51,9 +52,10 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     """Train and evaluate every defense on the MLP backbone. Writes all outputs."""
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     print(
-        f"[mlp] output_dir={output_dir} device={config.device} "
+        f"[mlp] output_dir={output_dir} device={device} "
         f"training_budget_mode={config.training_budget_mode} seeds={config.seeds}",
         flush=True,
     )
@@ -186,6 +188,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     _write_mlp_outputs(
         config=config,
         output_dir=output_dir,
+        device=device,
         train_df=train_df,
         test_df=test_df,
         y_train=y_train,
@@ -208,6 +211,7 @@ def _write_mlp_outputs(
     *,
     config: ExperimentConfig,
     output_dir: Path,
+    device: torch.device,
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     y_train: np.ndarray,
@@ -371,6 +375,7 @@ def _write_mlp_outputs(
 
     summary = {
         "architecture": f"MLP {config.hidden_dims}",
+        "resolved_device": str(device),
         "config": asdict(config),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),

@@ -240,14 +240,16 @@ def plot_gradient_masking(grad_df, output_path):
 # ---------------------------------------------------------------- entry point
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_ROOT / "extended_analysis"),
                         help="output directory (relative paths resolve against the repository root)")
     args = parser.parse_args()
 
     out_dir = resolve_path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(args.device)
+    device = idsds.resolve_device(args.device)
+    idsds.log_device(args.device, device)
 
     config = idsds.ExperimentConfig(
         train_path=str(idsds.DEFAULT_DATA_DIR / "train.csv"),

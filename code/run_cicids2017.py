@@ -25,7 +25,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-import torch
 
 import ids_defense_selection as idsds
 
@@ -100,7 +99,7 @@ class CICExperimentConfig:
     sa_trades_gamma: float = 1.0
     dst_update_interval: int = 2
     dst_ema_alpha: float = 0.7
-    device: str = "cpu"
+    device: str = "auto"
     sample_seed: int = 2026
     rebuild_cache: bool = False
 
@@ -259,7 +258,8 @@ def plot_family_recall_drop(df: pd.DataFrame, output_path: Path) -> None:
 def run_experiment(config: CICExperimentConfig) -> None:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(config.device)
+    device = idsds.resolve_device(config.device)
+    idsds.log_device(config.device, device)
 
     sampled_df = sample_cicids_dataset(config)
     train_df, test_df = train_test_split(
@@ -578,7 +578,8 @@ def parse_args() -> CICExperimentConfig:
     parser.add_argument("--baseline-epochs", type=int, default=8)
     parser.add_argument("--adv-epochs", type=int, default=6)
     parser.add_argument("--eval-attack-rows", type=int, default=30000)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--rebuild-cache", action="store_true")
     args = parser.parse_args()
     return CICExperimentConfig(

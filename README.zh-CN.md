@@ -33,7 +33,7 @@ uv run python code/prepare_data.py
 uv run python code/smoke_test.py
 
 # 3. 完整复现
-uv run python run_experiments.py --device cuda
+uv run python run_experiments.py
 ```
 
 `uv run` 会在项目环境中执行命令，无需手动激活环境；下文所有 `python ...` 示例都应以同样方式运行
@@ -90,6 +90,7 @@ bdcc-ids-defense-selection/
 │   │   └── style.py                          # 共享 matplotlib 样式与配色
 │   ├── prepare_data.py                       # 校验 / 修复数据集目录
 │   ├── smoke_test.py                         # 快速端到端自检
+│   ├── check_devices.py                      # CPU / CUDA / MPS 可用性报告
 │   ├── run_mlp.py                            # MLP 实验
 │   ├── run_cnn1d.py                          # 1D-CNN 实验
 │   ├── run_ft_transformer.py                 # FT-Transformer 实验
@@ -122,6 +123,20 @@ bdcc-ids-defense-selection/
 ---
 
 ## 运行实验
+
+### 设备选择
+
+`--device` 支持 `auto`（默认）、`cpu`、`cuda`、`cuda:N` 和 `mps`。`auto` 会优先使用可见的
+CUDA GPU，其次 Apple MPS，最后回退到 CPU；在没有 GPU 的机器上显式指定 `cuda` 会立即报出明确
+错误，而不是抛出一段难以理解的 torch 异常。解析结果会在启动时打印，并作为 `resolved_device`
+记录在 `run_summary.json` 中。
+
+```bash
+uv run python code/check_devices.py                  # 查看 CPU / CUDA / MPS
+uv run python run_experiments.py                     # 自动选择设备
+uv run python code/run_mlp.py --device cpu           # 固定用 CPU
+uv run python code/run_mlp.py --device cuda:1        # 固定用某块 GPU
+```
 
 ### 完整流程
 
@@ -191,6 +206,7 @@ FT-Transformer 占总成本的绝大部分。所有骨干网络也能在 CPU 上
 | **对抗训练预算** | **epsilon = 0.06，alpha = 0.015，20 步**（FT-Transformer：训练 7 步） |
 | 评测扰动预算 | epsilon ∈ {0.02, 0.05, 0.10} |
 | 评测 PGD 步数 | 20（`--eval-pgd-steps`），与训练预算相互独立 |
+| 设备 | `auto`（CUDA → MPS → CPU）；用 `--device cpu`、`cuda`、`cuda:N` 固定 |
 
 | 防御 | 训练时攻击 | 掩码 | 额外设置 |
 |---|---|---|---|
@@ -216,6 +232,9 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 **`ExperimentConfig` 的每个字段都是一个命令行参数。** 参数由 dataclass 自动生成，因此 CLI
 不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 47 个字段在三个
 骨干脚本中完全一致。
+
+每个字段的帮助文本和旧参数别名都写在 dataclass 元数据里；配置在构造时就会做校验：像
+`--batch-size 0`、未知的攻击名或格式错误的元组，都会立即报出一条可读的错误，并一次性列出所有问题。
 
 ```bash
 uv run python code/run_cnn1d.py --help              # 查看完整参数列表与默认值

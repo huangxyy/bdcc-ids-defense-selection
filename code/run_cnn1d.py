@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
 from ids_defense_selection import (
     BackboneRunFrames,
@@ -27,7 +26,9 @@ from ids_defense_selection import (
     emit_config,
     evaluate_defenses,
     load_unsw_nb15,
+    log_device,
     make_dataloader,
+    resolve_device,
     resolve_path,
     set_seed,
     stratified_subset_indices,
@@ -59,9 +60,10 @@ def main() -> None:
         emit_config(config)
 
     out_dir = Path(config.output_dir)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     print(
-        f"[cnn1d] output_dir={out_dir} device={config.device} "
+        f"[cnn1d] output_dir={out_dir} device={device} "
         f"training_budget_mode={config.training_budget_mode} seeds={config.seeds}",
         flush=True,
     )
@@ -124,6 +126,7 @@ def main() -> None:
     )
     summary = {
         "architecture": "1D-CNN (Conv1d(1,32,3) -> Conv1d(32,64,3) -> AvgPool -> FC(64,32) -> FC(32,1))",
+        "resolved_device": str(device),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "eval_rows": int(len(eval_set.y_eval)),

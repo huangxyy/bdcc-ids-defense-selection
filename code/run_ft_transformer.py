@@ -14,7 +14,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
 from ids_defense_selection import (
     BackboneRunFrames,
@@ -30,8 +29,10 @@ from ids_defense_selection import (
     emit_config,
     evaluate_defenses,
     load_unsw_nb15,
+    log_device,
     make_dataloader,
     resolve_path,
+    resolve_device,
     set_seed,
     stratified_subset_indices,
     train_all_defenses,
@@ -64,9 +65,10 @@ def main() -> None:
         emit_config(config)
 
     out_dir = Path(config.output_dir)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     print(
-        f"[ft_transformer] output_dir={out_dir} device={config.device} "
+        f"[ft_transformer] output_dir={out_dir} device={device} "
         f"training_budget_mode={config.training_budget_mode} seeds={config.seeds} "
         f"train_pgd_steps={config.adv_steps} eval_pgd_steps={config.eval_pgd_steps}",
         flush=True,
@@ -158,6 +160,7 @@ def main() -> None:
             f"n_heads={FT_TRANSFORMER_KWARGS['n_heads']}, "
             f"d_ffn={FT_TRANSFORMER_KWARGS['d_ffn']}), head: LayerNorm+Linear)"
         ),
+        "resolved_device": str(device),
         "parameter_count": count_parameters(reference_model),
         "adv_steps_training": int(config.adv_steps),
         "adv_steps_evaluation": int(config.eval_pgd_steps),

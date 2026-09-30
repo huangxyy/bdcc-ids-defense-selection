@@ -63,7 +63,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR),
                     help="dataset directory (relative paths resolve against the repository root)")
-    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--device", default="auto",
+                    help="torch device: auto, cpu, cuda, cuda:N or mps")
     ap.add_argument("--n-train", type=int, default=4000,
                     help="rows actually trained on in the check (the fit still uses the full set)")
     ap.add_argument("--n-attack", type=int, default=256, help="samples attacked in the constraint check")
@@ -71,7 +72,8 @@ def main() -> int:
     warnings.filterwarnings("ignore", message=".*not writable.*")
 
     t0 = time.perf_counter()
-    device = torch.device(args.device)
+    device = idsds.resolve_device(args.device)
+    idsds.log_device(args.device, device)
     d = resolve_path(args.data_dir)
     print("=" * 78)
     print("Smoke test -- backbone-conditioned Pareto analysis for IDS defenses")
@@ -219,7 +221,7 @@ def main() -> int:
         print("  Environment and data are ready.")
         if nskip:
             print("  (SKIP entries are informational, not failures.)")
-        print("  Next:  uv run python run_experiments.py --device cuda")
+        print("  Next:  uv run python run_experiments.py          # --device auto by default")
     else:
         print("  Fix the failures above before starting the full experiments.")
     print("=" * 78)

@@ -73,7 +73,8 @@ def main() -> int:
     ap.add_argument("--backbones", default="mlp,cnn,ft",
                     help="comma-separated subset of: mlp, cnn, ft")
     ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
-    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--device", default="auto",
+                    help="torch device passed to every backbone: auto, cpu, cuda, cuda:N or mps")
     ap.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     args = ap.parse_args()
     data_dir = resolve_path(args.data_dir)

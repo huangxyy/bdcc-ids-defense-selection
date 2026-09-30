@@ -21,10 +21,14 @@ _EXPORTS: dict[str, str] = {
     "DEFAULT_FULL_TEST_ATTACK_SETTINGS": ".config",
     "DEFAULT_SEEDS": ".config",
     "ExperimentConfig": ".config",
+    "OPTIONAL_DEFENSE_METHODS": ".config",
+    "REFERENCE_MODEL_NAMES": ".config",
+    "TRAINING_BUDGET_MODES": ".config",
     "add_config_arguments": ".config",
     "build_parser": ".config",
     "config_from_args": ".config",
     "emit_config": ".config",
+    "field_help": ".config",
     "parse_args": ".config",
     "parse_tuple_value": ".config",
     # paths
@@ -61,6 +65,11 @@ _EXPORTS: dict[str, str] = {
     "numpy_to_torch": ".data",
     "set_seed": ".data",
     "stratified_subset_indices": ".data",
+    # device
+    "describe_device": ".device",
+    "device_report": ".device",
+    "log_device": ".device",
+    "resolve_device": ".device",
     # defenses
     "DEFENSE_ORDER": ".defenses",
     "OPTIONAL_DEFENSES": ".defenses",

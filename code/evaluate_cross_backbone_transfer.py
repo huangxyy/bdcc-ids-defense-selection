@@ -32,9 +32,11 @@ from ids_defense_selection import (
     fit_supervised,
     generate_adversarial_examples,
     load_unsw_nb15,
+    log_device,
     make_dataloader,
     pgd_attack,
     predict_proba,
+    resolve_device,
     resolve_path,
     set_seed,
 )
@@ -106,7 +108,8 @@ def main() -> None:
     if args.print_config:
         emit_config(config)
     seeds = list(config.seeds)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     out_dir = Path(config.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"[transfer] device={device} seeds={seeds} "

@@ -89,7 +89,7 @@ class CICStrictExperimentConfig:
     cw_c: float = 1.0
     apgd_steps: int = 50
     apgd_rho: float = 0.75
-    device: str = "cpu"
+    device: str = "auto"
     split_seed: int = 2026
     train_sample_seed: int = 2027
     rebuild_cache: bool = False
@@ -355,7 +355,8 @@ def select_attack_families(eval_families: np.ndarray, eval_y: np.ndarray, min_sa
 def run_experiment(config: CICStrictExperimentConfig) -> None:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(config.device)
+    device = idsds.resolve_device(config.device)
+    idsds.log_device(config.device, device)
 
     train_df, test_df, split_summary = split_source_disjoint(config)
     x_train, y_train, x_test, y_test, metadata = build_cicids_features_with_provenance(train_df, test_df)
@@ -676,7 +677,8 @@ def parse_args() -> CICStrictExperimentConfig:
     parser.add_argument("--full-test-attack-rows", type=int, default=0)
     parser.add_argument("--train-max-rows", type=int, default=300000)
     parser.add_argument("--seeds", nargs="+", type=int, default=list(idsds.DEFAULT_SEEDS))
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--rebuild-cache", action="store_true")
     args = parser.parse_args()
     return CICStrictExperimentConfig(

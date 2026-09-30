@@ -10,8 +10,6 @@ throughout the study).
 """
 from __future__ import annotations
 
-import torch
-
 from ids_defense_selection import (
     CNN1DBackbone,
     DEFAULT_DATA_DIR,
@@ -19,6 +17,8 @@ from ids_defense_selection import (
     config_from_args,
     default_phi4_output_dir,
     emit_config,
+    log_device,
+    resolve_device,
     resolve_path,
 )
 from ids_defense_selection.phi4 import evaluate_phi4
@@ -45,8 +45,9 @@ def main() -> None:
     if args.print_config:
         emit_config(config)
 
-    device = torch.device(config.device)
-    print(f"[phi4-cnn] output_dir={config.output_dir} device={config.device} seeds={config.seeds}",
+    device = resolve_device(config.device)
+    log_device(config.device, device)
+    print(f"[phi4-cnn] output_dir={config.output_dir} device={device} seeds={config.seeds}",
           flush=True)
     evaluate_phi4(config, lambda input_dim: CNN1DBackbone(input_dim, config.dropout), device)
 
