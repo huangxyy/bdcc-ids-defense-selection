@@ -180,7 +180,8 @@ bdcc-ids-defense-selection/
 The remaining scripts (`run_cicids2017*.py`, `evaluate_cross_backbone_transfer.py`,
 `sweep_hyperparameters.py`, `analyze_extended.py`) implement analyses that are **not** part of the
 reported tables. The adaptive attack suite lives in
-`code/ids_defense_selection/adaptive.py` and is used by `smoke_test.py`.
+`code/ids_defense_selection/adaptive.py`; it runs as part of the evaluation
+(`evaluate_defenses`) whenever `--adaptive-eval` is passed, and `smoke_test.py` exercises it too.
 
 ---
 

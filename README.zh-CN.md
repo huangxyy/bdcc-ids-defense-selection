@@ -170,7 +170,8 @@ bdcc-ids-defense-selection/
 
 其余脚本（`run_cicids2017*.py`、`evaluate_cross_backbone_transfer.py`、
 `sweep_hyperparameters.py`、`analyze_extended.py`）实现的是**不属于**论文表格的分析，保留在此是为了
-完整性与后续研究。自适应攻击套件位于 `code/ids_defense_selection/adaptive.py`，由 `smoke_test.py` 使用。
+完整性与后续研究。自适应攻击套件位于 `code/ids_defense_selection/adaptive.py`，加上 `--adaptive-eval`
+后会在评测流程（`evaluate_defenses`）里自动运行，`smoke_test.py` 也会跑它。
 
 ---
 

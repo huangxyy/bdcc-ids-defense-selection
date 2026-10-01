@@ -1,15 +1,20 @@
 """Tests for the Pareto filtering and preference-weighted selection."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import pytest
 
+from ids_defense_selection.paths import PROJECT_ROOT
 from pareto_selection import (
     apply_admissibility,
     build_objective_matrices,
     build_objective_matrix,
     is_pareto_optimal,
     is_pareto_optimal_uncertain,
+    resolve_outputs_root,
     select_defense,
 )
 
@@ -156,3 +161,14 @@ def test_objective_matrices_report_per_seed_dispersion() -> None:
     # phi4: per-seed min over categories, then mean  (0.30 and 0.10 -> 0.20)
     assert np.isclose(means.loc["standard", "phi4"], 0.20)
     assert np.isclose(stds.loc["standard", "phi4"], np.std([0.30, 0.10], ddof=1))
+
+
+def test_outputs_root_is_resolved_against_the_repo_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--outputs-root must not follow the current working directory."""
+    monkeypatch.chdir(tmp_path)
+    assert resolve_outputs_root("outputs") == PROJECT_ROOT / "outputs"
+
+    absolute = tmp_path / "somewhere"
+    assert resolve_outputs_root(str(absolute)) == absolute

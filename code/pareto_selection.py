@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import warnings
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -24,7 +25,7 @@ import pandas as pd
 
 from ids_defense_selection import style as FS
 from ids_defense_selection.config import DEFAULT_EPSILON_LIST
-from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT
+from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT, resolve_path
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -40,6 +41,18 @@ BACKBONE_DIRS = {
 }
 
 DEFENSE_ORDER = FS.DEFENSE_ORDER  # 6 defenses in canonical order
+
+
+def resolve_outputs_root(value: str | Path) -> Path:
+    """Resolve ``--outputs-root`` against the repository root, never the cwd.
+
+    Every other script funnels user-supplied paths through
+    :func:`ids_defense_selection.paths.resolve_path`; this analysis reads the
+    same output tree, so it must follow the same rule.  Otherwise
+    ``--outputs-root outputs`` silently means ``$PWD/outputs`` and running the
+    script from a different directory would analyse an empty tree.
+    """
+    return resolve_path(value)
 
 # Theta presets: (w1_clean, w2_resilience, w3_cost, w4_fairness)
 THETA_PRESETS = {
@@ -766,8 +779,9 @@ def main() -> int:
     args = parse_args()
     ref_atk = args.ref_attack
     ref_eps = args.ref_epsilon
-    dirs = {key: os.path.join(args.outputs_root, sub) for key, sub in BACKBONE_DIRS.items()}
-    fig_dir = os.path.join(args.outputs_root, "figures")
+    outputs_root = resolve_outputs_root(args.outputs_root)
+    dirs = {key: os.path.join(outputs_root, sub) for key, sub in BACKBONE_DIRS.items()}
+    fig_dir = os.path.join(outputs_root, "figures")
     os.makedirs(fig_dir, exist_ok=True)
 
     # ── Load data ──
@@ -886,7 +900,7 @@ def main() -> int:
             for key in ("MLP", "CNN")
         },
     }
-    settings_path = os.path.join(args.outputs_root, "decision_settings.json")
+    settings_path = os.path.join(outputs_root, "decision_settings.json")
     with open(settings_path, "w", encoding="utf-8") as fh:
         json.dump(settings, fh, indent=2, ensure_ascii=False)
     print(f"  Saved: {settings_path}")
