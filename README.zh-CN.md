@@ -26,7 +26,7 @@ cd bdcc-ids-defense-selection
 # 创建环境，并按 uv.lock 安装锁定版本的依赖
 uv sync
 
-# 1. 把数据集放入 data/（见下文"数据集"），然后校验：
+# 1. 数据集已随仓库提供（见下文"数据集"），先校验：
 uv run python code/prepare_data.py
 
 # 2. 几秒钟：确认环境与数据可用
@@ -82,8 +82,14 @@ uv run python code/check_devices.py     # 期望 "available    : True"
 
 ## 数据集
 
-仓库**不包含**数据。请从 <https://research.unsw.edu.au/projects/unsw-nb15-dataset>
-下载 UNSW-NB15，并把两个官方划分放置为：
+UNSW-NB15 的两个官方划分**已随仓库提供**（已去掉 BOM，方向为官方方向）：
+
+- **[data/train.csv](data/train.csv)** —— 175,341 条（官方训练划分）
+- **[data/test.csv](data/test.csv)** —— 82,332 条（官方测试划分）
+
+因此新机器（或 GPU 服务器）只需 `git clone` / `git pull` 就能开跑，无需再单独下载。
+上游来源：<https://research.unsw.edu.au/projects/unsw-nb15-dataset>；如果你自行下载，
+请保持同样的文件名：
 
 ```
 data/train.csv    175,341 条    <- 官方 UNSW_NB15_training-set.csv
@@ -98,7 +104,8 @@ train/test 而没有确认哪个是哪个，这会悄悄把划分方向反过来
 uv run python code/prepare_data.py --fix-swap
 ```
 
-CIC-IDS2017 是可选的，只有跨数据集脚本需要；详见 [data/README.zh-CN.md](data/README.zh-CN.md)。
+CIC-IDS2017 **不在仓库中**（可选，只有跨数据集脚本需要）；详见
+[data/README.zh-CN.md](data/README.zh-CN.md)。
 
 ---
 

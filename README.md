@@ -28,7 +28,7 @@ cd bdcc-ids-defense-selection
 # create the environment and install the locked dependencies from uv.lock
 uv sync
 
-# 1. put the dataset in data/ (see "Dataset" below), then validate it:
+# 1. the dataset ships with the repo (see "Dataset" below); validate it:
 uv run python code/prepare_data.py
 
 # 2. a few seconds: confirms the environment and the data are usable
@@ -87,8 +87,16 @@ driver 595 / CUDA 13.2 and an RTX 5090 works with the default `uv sync` install.
 
 ## Dataset
 
-The data is **not** shipped with this repository. Download UNSW-NB15 from
-<https://research.unsw.edu.au/projects/unsw-nb15-dataset> and place the two official partitions as:
+The two official UNSW-NB15 partitions **ship with this repository**, already stripped of the
+byte-order mark and in the official split direction:
+
+- **[data/train.csv](data/train.csv)** — 175,341 records (the official training partition)
+- **[data/test.csv](data/test.csv)** — 82,332 records (the official testing partition)
+
+`git clone` / `git pull` is therefore all a new machine (or GPU server) needs before running the
+experiments. The upstream source is
+<https://research.unsw.edu.au/projects/unsw-nb15-dataset>; if you download the partitions
+yourself, place them under the same names:
 
 ```
 data/train.csv    175,341 records    <- official UNSW_NB15_training-set.csv
@@ -104,8 +112,8 @@ checking, which silently reverses the split. `code/prepare_data.py` detects that
 uv run python code/prepare_data.py --fix-swap
 ```
 
-CIC-IDS2017 is optional and only needed by the cross-dataset scripts; see `data/README.md`
-(also available in [简体中文](data/README.zh-CN.md)).
+CIC-IDS2017 is **not** shipped (it is optional and only needed by the cross-dataset scripts);
+see `data/README.md` (also available in [简体中文](data/README.zh-CN.md)).
 
 ---
 

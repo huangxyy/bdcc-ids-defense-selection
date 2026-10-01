@@ -2,13 +2,18 @@
 
 [English](README.md) | **简体中文**
 
-本仓库**不包含**数据集。请自行下载并把文件放到这里。
-
 ## UNSW-NB15（必需）
+
+两个官方划分**已随仓库提供**：
+
+- [`train.csv`](train.csv) —— 175,341 条（官方训练划分，UTF-8 无 BOM）
+- [`test.csv`](test.csv) —— 82,332 条（官方测试划分）
+
+`git clone` / `git pull` 即可，主实验不需要再下载任何数据。
 
 来源：<https://research.unsw.edu.au/projects/unsw-nb15-dataset>
 
-把两个**官方**划分按代码期望的文件名放置：
+如果你要替换它们，请保持代码期望的文件名（以及官方方向——较大的划分是训练集）：
 
 ```
 data/train.csv    175,341 条    <- 官方 UNSW_NB15_training-set.csv
@@ -42,7 +47,7 @@ uv run python code/prepare_data.py --fix-swap
 
 ## CIC-IDS2017（可选）
 
-只有 `code/run_cicids2017.py` 和 `code/run_cicids2017_source_disjoint.py` 需要。
+**不随仓库提供**；只有 `code/run_cicids2017.py` 和 `code/run_cicids2017_source_disjoint.py` 需要。
 
 来源：<https://www.unb.ca/cic/datasets/ids-2017.html>
 

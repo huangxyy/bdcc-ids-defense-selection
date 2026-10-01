@@ -2,13 +2,19 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-The datasets are **not** included in this repository. Download them and place the files here.
-
 ## UNSW-NB15 (required)
+
+The two official partitions **ship with this repository**:
+
+- [`train.csv`](train.csv) — 175,341 records (official training partition, UTF-8 without BOM)
+- [`test.csv`](test.csv) — 82,332 records (official testing partition)
+
+`git clone` / `git pull` is all you need; there is nothing to download for the main experiments.
 
 Source: <https://research.unsw.edu.au/projects/unsw-nb15-dataset>
 
-Place the two **official** partitions under the names this code expects:
+If you replace them, keep the names this code expects (and the official direction —
+the larger partition is the training one):
 
 ```
 data/train.csv    175,341 records    <- official UNSW_NB15_training-set.csv
@@ -45,7 +51,8 @@ After the swap, `train.csv` holds 175,341 records and `test.csv` holds 82,332 --
 
 ## CIC-IDS2017 (optional)
 
-Only needed by `code/run_cicids2017.py` and `code/run_cicids2017_source_disjoint.py`.
+**Not** shipped with the repository; only needed by `code/run_cicids2017.py` and
+`code/run_cicids2017_source_disjoint.py`.
 
 Source: <https://www.unb.ca/cic/datasets/ids-2017.html>
 

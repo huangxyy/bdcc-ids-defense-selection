@@ -1,5 +1,8 @@
-# Data (download separately — see data/README.md)
+# Data: the UNSW-NB15 partitions ship with the repository; everything else is
+# downloaded separately (see data/README.md).
 data/*.csv
+!data/train.csv
+!data/test.csv
 data/cicids2017/
 
 # Experiment outputs

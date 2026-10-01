@@ -6,3 +6,8 @@
 *.png binary
 *.pdf binary
 *.jpg binary
+
+# The shipped dataset partitions are large text files: never diff them and keep
+# them out of GitHub's language statistics.
+data/train.csv -diff linguist-vendored
+data/test.csv  -diff linguist-vendored
