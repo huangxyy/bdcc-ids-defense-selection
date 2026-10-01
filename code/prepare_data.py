@@ -25,9 +25,16 @@ import os
 import sys
 from pathlib import Path
 
-TRAIN_ROWS = 175_341   # official UNSW-NB15 training partition
-TEST_ROWS = 82_332     # official UNSW-NB15 testing partition
-REQUIRED_COLUMNS = ("label", "attack_cat")
+from ids_defense_selection.paths import DEFAULT_DATA_DIR, resolve_path
+from ids_defense_selection.spec import (
+    REQUIRED_COLUMNS,
+    UNSW_NB15_TEST_ROWS,
+    UNSW_NB15_TRAIN_ROWS,
+)
+
+# Backwards-compatible aliases (smoke_test.py imports these names).
+TRAIN_ROWS = UNSW_NB15_TRAIN_ROWS
+TEST_ROWS = UNSW_NB15_TEST_ROWS
 
 
 def count_records(path: Path) -> int:
@@ -40,7 +47,9 @@ def count_records(path: Path) -> int:
 
 
 def read_csv_header(path: Path) -> list[str]:
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    # utf-8-sig strips the byte-order mark that the distributed files carry,
+    # so the first column is reported as "id" instead of "\ufeffid".
+    with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
         return [c.strip() for c in fh.readline().strip().split(",")]
 
 
@@ -62,12 +71,14 @@ def check_partition(path: Path, expected: int, role: str) -> tuple[bool, int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", default="data", help="directory holding train.csv and test.csv")
+    ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR),
+                    help="directory holding train.csv and test.csv "
+                         "(relative paths resolve against the repository root)")
     ap.add_argument("--fix-swap", action="store_true",
                     help="if the two files are reversed, swap them back")
     args = ap.parse_args()
 
-    d = Path(args.data_dir)
+    d = resolve_path(args.data_dir)
     train, test = d / "train.csv", d / "test.csv"
 
     print("=" * 78)
@@ -96,7 +107,7 @@ def main() -> int:
         print()
         print("  Next steps:")
         print("    uv run python code/smoke_test.py                   # ~1 minute sanity check")
-        print("    uv run python run_experiments.py --device cuda     # full reproduction")
+        print("    uv run python run_experiments.py                   # full reproduction (--device auto)")
         return 0
 
     print("  Dataset is not ready. Download UNSW-NB15 from")

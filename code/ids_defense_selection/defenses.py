@@ -26,7 +26,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .attacks import clamp_numeric, pgd_attack
-from .config import ExperimentConfig
+from .config import OPTIONAL_DEFENSE_METHODS, ExperimentConfig
 
 
 def fit_reference_models(
@@ -656,7 +656,7 @@ DEFENSE_ORDER: tuple[str, ...] = (
     "class_aware_constrained",
 )
 
-OPTIONAL_DEFENSES: tuple[str, ...] = ("progressive", "sa_trades", "dst_sa_trades")
+OPTIONAL_DEFENSES: tuple[str, ...] = OPTIONAL_DEFENSE_METHODS
 
 
 @dataclass

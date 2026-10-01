@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import warnings
 
@@ -22,6 +23,8 @@ import numpy as np
 import pandas as pd
 
 from ids_defense_selection import style as FS
+from ids_defense_selection.config import DEFAULT_EPSILON_LIST
+from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -29,11 +32,10 @@ FS.apply_style()
 
 # Canonical output directories written by run_experiments.py (and the
 # CIC-IDS2017 script).  --outputs-root shifts the whole tree.
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKBONE_DIRS = {
-    "MLP": "mlp",
-    "CNN": "cnn1d",
-    "FT-Trans": "ft_transformer",
+    "MLP": BACKBONE_OUTPUT_SUBDIRS["mlp"],
+    "CNN": BACKBONE_OUTPUT_SUBDIRS["cnn"],
+    "FT-Trans": BACKBONE_OUTPUT_SUBDIRS["ft"],
     "CICIDS": "cicids2017_strict_matched_budget_run",
 }
 
@@ -66,7 +68,8 @@ def load_backbone_data(backbone: str, dirs: dict[str, str]) -> dict:
     if d is None or not os.path.isdir(d):
         return {}
     data = {}
-    for name in ("mean_results", "efficiency_mean", "category_mean_results"):
+    for name in ("mean_results", "std_results", "efficiency_mean", "efficiency_raw",
+                 "category_mean_results", "category_raw_results"):
         df = _load_csv_safe(os.path.join(d, f"{name}.csv"))
         if df is not None:
             data[name] = df
@@ -122,6 +125,97 @@ def compute_phi4(category_results: pd.DataFrame | None, ref_attack: str,
     return subset.groupby("model")["adv_recall"].min()
 
 
+def compute_phi12_stds(std_results: pd.DataFrame | None, ref_attack: str,
+                       ref_epsilon: float) -> tuple[pd.Series | None, pd.Series | None]:
+    """Per-seed dispersion of phi1 and phi2, read from std_results.csv."""
+    if std_results is None or std_results.empty:
+        return None, None
+
+    def std_at(attack: str, epsilon: float, column: str) -> pd.Series | None:
+        subset = std_results[
+            (std_results["attack"] == attack) & np.isclose(std_results["epsilon"], epsilon)]
+        if subset.empty:
+            return None
+        return subset.set_index("model")[column]
+
+    return std_at("clean", 0.0, "f1"), std_at(ref_attack, ref_epsilon, "attack_success_rate")
+
+
+def compute_phi3_with_std(efficiency_raw: pd.DataFrame | None) -> tuple[pd.Series | None, pd.Series | None]:
+    """phi3 from per-seed training times, with the dispersion propagated.
+
+    relative cost r = train_seconds / standard.train_seconds (per seed);
+    phi3 = 1 / r, and std(phi3) ~ std(r) / mean(r)^2.
+    """
+    if efficiency_raw is None or efficiency_raw.empty:
+        return None, None
+    if not {"seed", "model", "train_seconds"}.issubset(efficiency_raw.columns):
+        return None, None
+    standard = (efficiency_raw[efficiency_raw["model"] == "standard"]
+                .set_index("seed")["train_seconds"])
+    if standard.empty:
+        return None, None
+    frame = efficiency_raw.copy()
+    frame["relative_cost"] = [
+        row["train_seconds"] / standard.get(row["seed"], np.nan)
+        for _, row in frame.iterrows()
+    ]
+    mean = frame.groupby("model")["relative_cost"].mean()
+    std = frame.groupby("model")["relative_cost"].std().fillna(0.0)
+    mean_clipped = mean.clip(lower=1e-6)
+    return 1.0 / mean_clipped, std / (mean_clipped ** 2)
+
+
+def compute_phi4_with_std(category_raw: pd.DataFrame | None, ref_attack: str,
+                          ref_epsilon: float) -> tuple[pd.Series | None, pd.Series | None]:
+    """phi4 from per-seed per-category recall (min per seed, then mean/std)."""
+    if category_raw is None or category_raw.empty:
+        return None, None
+    subset = category_raw[
+        (category_raw["attack"] == ref_attack)
+        & np.isclose(category_raw["epsilon"], ref_epsilon)]
+    if subset.empty:
+        return None, None
+    per_seed = subset.groupby(["model", "seed"])["adv_recall"].min().reset_index()
+    mean = per_seed.groupby("model")["adv_recall"].mean()
+    std = per_seed.groupby("model")["adv_recall"].std().fillna(0.0)
+    return mean, std
+
+
+def build_objective_matrices(data: dict, ref_attack: str,
+                             ref_epsilon: float) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return (means, stds): the 6x4 objective matrix and its per-seed dispersion.
+
+    Std columns are zero-filled when the per-seed files are unavailable, so an
+    old output directory still works (with a deterministic decision, i.e. the
+    confidence margin has no effect).
+    """
+    means = build_objective_matrix(data, ref_attack, ref_epsilon)
+    stds = pd.DataFrame(0.0, index=means.index, columns=means.columns, dtype=float)
+    if means.empty:
+        return means, stds
+
+    phi1_std, phi2_std = compute_phi12_stds(data.get("std_results"), ref_attack, ref_epsilon)
+    phi3_mean, phi3_std = compute_phi3_with_std(data.get("efficiency_raw"))
+    phi4_mean, phi4_std = compute_phi4_with_std(data.get("category_raw_results"),
+                                                ref_attack, ref_epsilon)
+    # phi3/phi4 are per-seed quantities (cost ratio, worst-category recall):
+    # when the raw files exist, take mean over seeds of the per-seed value
+    # instead of the aggregate-then-threshold shortcut used by older runs.
+    for column, series_mean, series_std in (("phi1", None, phi1_std),
+                                            ("phi2", None, phi2_std),
+                                            ("phi3", phi3_mean, phi3_std),
+                                            ("phi4", phi4_mean, phi4_std)):
+        for model in means.index:
+            if series_mean is not None and model in series_mean.index \
+                    and np.isfinite(series_mean[model]):
+                means.loc[model, column] = float(series_mean[model])
+            if series_std is not None and model in series_std.index \
+                    and np.isfinite(series_std[model]):
+                stds.loc[model, column] = float(series_std[model])
+    return means, stds
+
+
 def build_objective_matrix(data: dict, ref_attack: str,
                             ref_epsilon: float) -> pd.DataFrame:
     """
@@ -143,6 +237,10 @@ def build_objective_matrix(data: dict, ref_attack: str,
     # Align on DEFENSE_ORDER; keep only models present in all phis
     models = [m for m in DEFENSE_ORDER if m in phi1.index and
               m in phi2.index and m in phi3.index]
+
+    if not models:
+        # e.g. the requested (attack, epsilon) is not part of the stored results
+        return pd.DataFrame(columns=["phi1", "phi2", "phi3", "phi4"]).rename_axis("model")
 
     rows = []
     for m in models:
@@ -189,6 +287,45 @@ def select_defense(objectives: np.ndarray, defense_names: list,
     norm = (objectives - lo) / (hi - lo + 1e-10)
     scores = norm @ np.array(theta)
     return defense_names[int(np.argmax(scores))]
+
+
+def is_pareto_optimal_uncertain(means: pd.DataFrame, stds: pd.DataFrame,
+                                margin: float = 1.0) -> np.ndarray:
+    """Dominance test that accounts for run-to-run variation (paper Eq. 4).
+
+    Candidate j dominates i when its *lower* confidence bound is at least i's
+    *upper* confidence bound on every objective (mean - margin*std >=
+    mean + margin*std), with at least one strict improvement.  ``margin=0``
+    recovers the deterministic criterion exactly.
+    """
+    columns = ["phi1", "phi2", "phi3", "phi4"]
+    m = means[columns].to_numpy(dtype=float)
+    s = stds.reindex(means.index)[columns].fillna(0.0).to_numpy(dtype=float)
+    n = len(m)
+    optimal = np.ones(n, dtype=bool)
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            lower_j = m[j] - margin * s[j]
+            upper_i = m[i] + margin * s[i]
+            if np.all(lower_j >= upper_i) and np.any(lower_j > upper_i):
+                optimal[i] = False
+                break
+    return optimal
+
+
+def apply_admissibility(means: pd.DataFrame, min_phi2: float = 0.0,
+                        min_phi4: float = 0.0) -> pd.Series:
+    """Boolean mask of candidates that clear the minimum-acceptable thresholds.
+
+    Applied *before* Pareto filtering and scoring, so a fully compensatory
+    weighted sum can never return a candidate that is unacceptable on security
+    grounds (e.g. an undefended baseline).
+    """
+    if means.empty:
+        return pd.Series(dtype=bool)
+    return (means["phi2"] >= min_phi2) & (means["phi4"] >= min_phi4)
 
 
 # ── Figure 1: Pareto front comparison ────────────────────────────────────────
@@ -348,10 +485,11 @@ def plot_risk_surface_heatmap(data_mlp: dict, data_cnn: dict,
 
 # ── Figure 3: Epsilon Pareto evolution (MLP only) ────────────────────────────
 
-EPSILON_LEVELS = [0.02, 0.05, 0.10]
+EPSILON_LEVELS = list(DEFAULT_EPSILON_LIST)
 EPS_STYLES = {0.02: ("o", "solid",  0.9),
               0.05: ("s", "dashed", 0.75),
               0.10: ("D", "dotted", 0.6)}
+DEFAULT_EPS_STYLE = ("o", "solid", 0.8)
 
 
 def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
@@ -369,7 +507,7 @@ def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
 
     legend_eps = []
     for eps in EPSILON_LEVELS:
-        mk, ls, alp = EPS_STYLES[eps]
+        mk, ls, alp = EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)
         phi2 = compute_phi2(mr, "pgd", eps)
         if phi2.empty:
             continue
@@ -421,8 +559,8 @@ def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
     # Epsilon style legend using Line2D proxies
     from matplotlib.lines import Line2D
     eps_handles = [
-        Line2D([0], [0], marker=EPS_STYLES[eps][0], color="0.4",
-               linestyle=EPS_STYLES[eps][1], linewidth=0.8,
+        Line2D([0], [0], marker=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[0], color="0.4",
+               linestyle=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[1], linewidth=0.8,
                markersize=5, label=f"$\\varepsilon$={eps:.2f}")
         for eps in EPSILON_LEVELS
     ]
@@ -497,11 +635,29 @@ def plot_theta_sensitivity(obj_mlp: pd.DataFrame, obj_cnn: pd.DataFrame,
 # ── CSV output helpers ────────────────────────────────────────────────────────
 
 def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
-                            out_path: str) -> None:
+                           out_path: str, *,
+                           stds: pd.DataFrame | None = None,
+                           pareto_deterministic: np.ndarray | None = None,
+                           admissible: pd.Series | None = None) -> None:
+    """Write the 4-D risk profile with dispersion and both Pareto verdicts.
+
+    ``is_pareto_optimal`` uses the uncertainty-aware criterion (confidence
+    margin); ``is_pareto_optimal_deterministic`` keeps the point-estimate
+    verdict so a reviewer can see which decisions the margin changes.
+    """
     df = obj.copy().reset_index()
     df.columns = ["model", "phi1_clean_f1", "phi2_resilience",
                   "phi3_cost_eff", "phi4_fairness"]
+    if stds is not None:
+        std_view = stds.reindex(obj.index)[["phi1", "phi2", "phi3", "phi4"]].reset_index(drop=True)
+        for source, target in zip(("phi1", "phi2", "phi3", "phi4"),
+                                  ("phi1_std", "phi2_std", "phi3_std", "phi4_std")):
+            df[target] = std_view[source].to_numpy()
     df["is_pareto_optimal"] = pareto_mask
+    if pareto_deterministic is not None:
+        df["is_pareto_optimal_deterministic"] = pareto_deterministic
+    if admissible is not None:
+        df["admissible"] = admissible.reindex(obj.index).to_numpy()
     df.to_csv(out_path, index=False, float_format="%.6f")
     print(f"  Saved: {out_path}")
 
@@ -531,26 +687,47 @@ def write_selection_csv(obj_mlp: pd.DataFrame, obj_cnn: pd.DataFrame,
 
 # ── Stdout summary ────────────────────────────────────────────────────────────
 
-def print_summary(backbone: str, obj: pd.DataFrame) -> None:
+def print_summary(backbone: str, obj: pd.DataFrame, *,
+                  stds: pd.DataFrame | None = None,
+                  pareto: np.ndarray | None = None,
+                  admissible: pd.Series | None = None,
+                  margin: float = 1.0) -> None:
     if obj.empty:
         print(f"\n[{backbone}] No data available.")
         return
 
     mat    = obj[["phi1", "phi2", "phi3", "phi4"]].values
     models = obj.index.tolist()
-    pareto = is_pareto_optimal(mat)
+    if pareto is None:
+        pareto = is_pareto_optimal(mat)
+    elif isinstance(pareto, pd.Series):
+        pareto = pareto.reindex(models).fillna(False).to_numpy(dtype=bool)
+    else:
+        pareto = np.asarray(pareto, dtype=bool)
 
     print(f"\n{'='*60}")
     print(f"  {backbone} Backbone — 4D Risk Profile")
+    if margin:
+        print(f"  (Pareto uses mean ± {margin:g}·std; admissible thresholds applied)")
     print(f"{'='*60}")
-    header = f"{'Defense':<25}  phi1   phi2   phi3   phi4  Pareto"
+    header = f"{'Defense':<25}  phi1   phi2   phi3   phi4  Pareto  Admissible"
     print(header)
     print("-" * len(header))
     for i, m in enumerate(models):
         p1, p2, p3, p4 = mat[i]
         star = "*" if pareto[i] else " "
+        ok = "yes" if (admissible is None or bool(admissible.get(m, True))) else "NO"
         print(f"  {FS.get_label(m):<23}  {p1:.3f}  {p2:.3f}  {p3:.3f}"
-              f"  {p4:.3f}  {star}")
+              f"  {p4:.3f}  {star}       {ok}")
+
+    if stds is not None and not stds.empty:
+        print("\n  per-seed dispersion (std):")
+        for m in models:
+            if m not in stds.index:
+                continue
+            row = stds.loc[m]
+            print(f"    {FS.get_label(m):<23}  ±{row['phi1']:.4f}  ±{row['phi2']:.4f}"
+                  f"  ±{row['phi3']:.4f}  ±{row['phi4']:.4f}")
 
     print(f"\n  Pareto-optimal defenses: "
           f"{', '.join(FS.get_label(m) for m, ok in zip(models, pareto) if ok)}")
@@ -570,9 +747,16 @@ def parse_args():
                    help="Reference attack for phi2/phi4 (default: pgd)")
     p.add_argument("--ref-epsilon",  type=float, default=0.10,
                    help="Reference epsilon (default: 0.10)")
-    p.add_argument("--outputs-root", default=os.path.join(PROJECT_ROOT, "outputs"),
+    p.add_argument("--outputs-root", default=str(DEFAULT_OUTPUT_ROOT),
                    help="root directory containing mlp/, cnn1d/, ft_transformer/ "
                         "(default: <repo>/outputs)")
+    p.add_argument("--confidence-margin", type=float, default=1.0,
+                   help="std multiples for the uncertainty-aware dominance test "
+                        "(0 = deterministic point estimates)")
+    p.add_argument("--min-phi2", type=float, default=0.0,
+                   help="admissibility threshold: drop candidates with resilience below this")
+    p.add_argument("--min-phi4", type=float, default=0.0,
+                   help="admissibility threshold: drop candidates with worst-class recall below this")
     p.add_argument("--no-figs",      action="store_true",
                    help="Skip figure generation")
     return p.parse_args()
@@ -598,32 +782,114 @@ def main() -> int:
             print("\nNo backbone results found; nothing to analyse.")
             return 1
 
-    # ── Build objective matrices ──
-    obj_mlp  = build_objective_matrix(data["MLP"],  ref_atk, ref_eps)
-    obj_cnn  = build_objective_matrix(data["CNN"],  ref_atk, ref_eps)
+    # ── Build objective matrices (means + per-seed dispersion) ──
+    print(f"\nDecision settings: margin={args.confidence_margin:g}·std, "
+          f"min_phi2={args.min_phi2:g}, min_phi4={args.min_phi4:g}")
+    prepared: dict[str, dict] = {}
+    for key, label in (("MLP", "MLP"), ("CNN", "1D-CNN")):
+        means, stds = build_objective_matrices(data[key], ref_atk, ref_eps)
+        entry = {"means": means, "stds": stds, "admissible": pd.Series(dtype=bool),
+                 "dropped": [], "pareto_uncertain": [], "pareto_deterministic": []}
+        if means.empty:
+            if data[key]:
+                print(f"  [warning] {label} results exist but contain no "
+                      f"attack={ref_atk!r} at epsilon={ref_eps:.2f}; "
+                      "check --ref-attack/--ref-epsilon against mean_results.csv")
+            prepared[key] = entry
+            continue
+
+        if means["phi4"].equals(means["phi1"]):
+            print(f"  [warning] {label}: phi4 (worst-class recall) is missing for this "
+                  "reference scenario and fell back to phi1; make sure the category "
+                  "evaluation ran at the same (attack, epsilon) "
+                  "(e.g. --category-epsilon matches --ref-epsilon).")
+
+        admissible = apply_admissibility(means, args.min_phi2, args.min_phi4)
+        entry["admissible"] = admissible
+        entry["dropped"] = [m for m in means.index if not bool(admissible.get(m, True))]
+        if entry["dropped"]:
+            print(f"  [{label}] inadmissible (phi2 < {args.min_phi2:g} or "
+                  f"phi4 < {args.min_phi4:g}): {', '.join(entry['dropped'])}")
+
+        kept = means[admissible]
+        if kept.empty:
+            print(f"  [{label}] no candidate passes the admissibility thresholds.")
+            prepared[key] = entry
+            continue
+        kept_stds = stds.reindex(kept.index).fillna(0.0)
+        pareto_uncertain = is_pareto_optimal_uncertain(kept, kept_stds, args.confidence_margin)
+        pareto_det = is_pareto_optimal(kept[["phi1", "phi2", "phi3", "phi4"]].values)
+        entry["kept"] = kept
+        entry["kept_stds"] = kept_stds
+        entry["pareto_uncertain"] = [m for m, ok in zip(kept.index, pareto_uncertain) if ok]
+        entry["pareto_deterministic"] = [m for m, ok in zip(kept.index, pareto_det) if ok]
+        # full-length masks for the CSV / terminal table
+        full_u = pd.Series(False, index=means.index)
+        full_u.loc[kept.index] = pareto_uncertain
+        full_d = pd.Series(False, index=means.index)
+        full_d.loc[kept.index] = pareto_det
+        entry["mask_uncertain"] = full_u
+        entry["mask_deterministic"] = full_d
+        prepared[key] = entry
 
     # ── Stdout summaries ──
-    print_summary("MLP",  obj_mlp)
-    print_summary("1D-CNN", obj_cnn)
+    for key, label in (("MLP", "MLP"), ("CNN", "1D-CNN")):
+        entry = prepared[key]
+        if entry["means"].empty:
+            print_summary(label, entry["means"])
+            continue
+        print_summary(label, entry["means"], stds=entry["stds"],
+                      pareto=entry.get("mask_uncertain"),
+                      admissible=entry["admissible"],
+                      margin=args.confidence_margin)
+        print(f"    pareto (margin={args.confidence_margin:g}): "
+              f"{', '.join(FS.get_label(m) for m in entry['pareto_uncertain'])}")
+        if entry["pareto_deterministic"] != entry["pareto_uncertain"]:
+            print(f"    point-estimate front differs: "
+                  f"{', '.join(FS.get_label(m) for m in entry['pareto_deterministic'])}")
 
     # ── CSV outputs ──
     print("\nWriting CSV tables...")
-    for backbone, obj, base_dir in [
-        ("MLP",    obj_mlp,  dirs["MLP"]),
-        ("CNN",    obj_cnn,  dirs["CNN"]),
-    ]:
-        if obj.empty:
+    for key, base_dir in (("MLP", dirs["MLP"]), ("CNN", dirs["CNN"])):
+        entry = prepared[key]
+        if entry["means"].empty:
             continue
-        mat    = obj[["phi1", "phi2", "phi3", "phi4"]].values
-        pareto = is_pareto_optimal(mat)
         write_risk_profile_csv(
-            obj, pareto,
-            os.path.join(base_dir, "risk_profile_4d.csv"))
+            entry["means"], entry["mask_uncertain"],
+            os.path.join(base_dir, "risk_profile_4d.csv"),
+            stds=entry["stds"],
+            pareto_deterministic=entry.get("mask_deterministic"),
+            admissible=entry["admissible"])
 
-    target_dir = dirs["MLP"] if not obj_mlp.empty else dirs["CNN"]
+    obj_mlp = prepared["MLP"].get("kept", prepared["MLP"]["means"].iloc[0:0])
+    obj_cnn = prepared["CNN"].get("kept", prepared["CNN"]["means"].iloc[0:0])
+    target_dir = dirs["MLP"] if not prepared["MLP"]["means"].empty else dirs["CNN"]
     os.makedirs(target_dir, exist_ok=True)
     write_selection_csv(obj_mlp, obj_cnn,
                         os.path.join(target_dir, "pareto_selection_results.csv"))
+
+    settings = {
+        "reference_attack": ref_atk,
+        "reference_epsilon": ref_eps,
+        "confidence_margin": args.confidence_margin,
+        "min_phi2": args.min_phi2,
+        "min_phi4": args.min_phi4,
+        "backbones": {
+            key: {
+                "n_candidates": int(len(prepared[key]["means"])),
+                "inadmissible": prepared[key]["dropped"],
+                "pareto_uncertain": prepared[key]["pareto_uncertain"],
+                "pareto_deterministic": prepared[key]["pareto_deterministic"],
+                "dispersion_available": bool(
+                    not prepared[key]["stds"].empty and prepared[key]["stds"].to_numpy().sum() > 0),
+            }
+            for key in ("MLP", "CNN")
+        },
+    }
+    settings_path = os.path.join(args.outputs_root, "decision_settings.json")
+    with open(settings_path, "w", encoding="utf-8") as fh:
+        json.dump(settings, fh, indent=2, ensure_ascii=False)
+    print(f"  Saved: {settings_path}")
 
     if args.no_figs:
         print("\nFigure generation skipped (--no-figs).")

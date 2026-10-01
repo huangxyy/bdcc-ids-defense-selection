@@ -23,35 +23,45 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CODE = ROOT / "code"
+sys.path.insert(0, str(CODE))
 
+from ids_defense_selection.paths import (  # noqa: E402
+    BACKBONE_OUTPUT_SUBDIRS,
+    BACKBONE_RUNNERS,
+    DEFAULT_DATA_DIR,
+    DEFAULT_OUTPUT_ROOT,
+    resolve_path,
+)
+
+#: Backbone CLI key -> runner script, canonical output directory and description.
 BACKBONES = {
     "mlp": {
-        "script": "run_mlp.py",
-        "out": "outputs/mlp",
+        "script": BACKBONE_RUNNERS["mlp"],
+        "out": DEFAULT_OUTPUT_ROOT / BACKBONE_OUTPUT_SUBDIRS["mlp"],
         "extra": [],
         "note": "MLP backbone (128-64-32)",
     },
     "cnn": {
-        "script": "run_cnn1d.py",
-        "out": "outputs/cnn1d",
+        "script": BACKBONE_RUNNERS["cnn"],
+        "out": DEFAULT_OUTPUT_ROOT / BACKBONE_OUTPUT_SUBDIRS["cnn"],
         "extra": [],
         "note": "1D-CNN backbone",
     },
     "ft": {
-        "script": "run_ft_transformer.py",
-        "out": "outputs/ft_transformer",
+        "script": BACKBONE_RUNNERS["ft"],
+        "out": DEFAULT_OUTPUT_ROOT / BACKBONE_OUTPUT_SUBDIRS["ft"],
         "extra": [],
         "note": "FT-Transformer backbone (slowest: allow several hours per seed)",
     },
 }
 
 
-def build_cmd(key: str, args) -> list[str]:
+def build_cmd(key: str, args, data_dir: Path) -> list[str]:
     spec = BACKBONES[key]
     cmd = [sys.executable, "-u", str(CODE / spec["script"]),
-           "--train-path", str(Path(args.data_dir) / "train.csv"),
-           "--test-path", str(Path(args.data_dir) / "test.csv"),
-           "--output-dir", str(ROOT / spec["out"]),
+           "--train-path", str(data_dir / "train.csv"),
+           "--test-path", str(data_dir / "test.csv"),
+           "--output-dir", str(spec["out"]),
            "--device", args.device,
            "--training-budget-mode", "matched_continuation"]
     cmd += spec["extra"]
@@ -62,10 +72,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--backbones", default="mlp,cnn,ft",
                     help="comma-separated subset of: mlp, cnn, ft")
-    ap.add_argument("--data-dir", default="data")
-    ap.add_argument("--device", default="cuda")
+    ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
+    ap.add_argument("--device", default="auto",
+                    help="torch device passed to every backbone: auto, cpu, cuda, cuda:N or mps")
     ap.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     args = ap.parse_args()
+    data_dir = resolve_path(args.data_dir)
+    args.data_dir = str(data_dir)
 
     keys = [k.strip().lower() for k in args.backbones.split(",") if k.strip()]
     unknown = [k for k in keys if k not in BACKBONES]
@@ -96,7 +109,7 @@ def main() -> int:
     done: list[tuple[str, float, str]] = []
     for i, key in enumerate(keys, 1):
         spec = BACKBONES[key]
-        cmd = build_cmd(key, args)
+        cmd = build_cmd(key, args, data_dir)
         print(f"-- step {i}/{len(keys)}: {key} -- {spec['note']} " + "-" * 20)
         print("   " + " ".join(cmd))
         if args.dry_run:
@@ -109,7 +122,7 @@ def main() -> int:
             print(f"   FAILED (exit {rc}) after {dt/60:.1f} min")
             return rc
         print(f"   done in {dt/60:.1f} min -> {spec['out']}/")
-        done.append((key, dt, spec["out"]))
+        done.append((key, dt, str(spec["out"])))
         print()
 
     if args.dry_run:

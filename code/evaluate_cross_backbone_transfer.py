@@ -20,6 +20,8 @@ import torch
 
 from ids_defense_selection import (
     CNN1DBackbone,
+    DEFAULT_DATA_DIR,
+    DEFAULT_OUTPUT_ROOT,
     FT_TRANSFORMER_KWARGS,
     FTTransformerBackbone,
     MLPBackbone,
@@ -28,10 +30,13 @@ from ids_defense_selection import (
     config_from_args,
     emit_config,
     fit_supervised,
+    generate_adversarial_examples,
     load_unsw_nb15,
+    log_device,
     make_dataloader,
     pgd_attack,
     predict_proba,
+    resolve_device,
     resolve_path,
     set_seed,
 )
@@ -58,20 +63,17 @@ def train_pgd_at(model, x_train, y_train, config, metadata, device):
                           adversarial=True, attack_builder=attack_builder)
 
 
-def compute_transfer_asr(source_model, target_model, x_eval, y_eval, config, metadata, device):
+def compute_transfer_asr(source_model, target_model, x_eval, y_eval, config, metadata, device,
+                         *, attack: str, epsilon: float):
     """Attack the source model and measure the attack-success rate on the target."""
-    mask_t = torch.from_numpy(metadata["numeric_mask"].astype(np.float32)).to(device)
-    mins_t = torch.from_numpy(metadata["numeric_mins"].astype(np.float32)).to(device)
-    maxs_t = torch.from_numpy(metadata["numeric_maxs"].astype(np.float32)).to(device)
-    x_t = torch.from_numpy(np.ascontiguousarray(x_eval)).float().to(device)
-    y_t = torch.from_numpy(np.ascontiguousarray(y_eval)).float().to(device)
-    source_model.eval()
-    x_adv = pgd_attack(source_model, x_t, y_t, config.category_epsilon,
-                       config.category_epsilon * config.eval_pgd_alpha_ratio,
-                       config.eval_pgd_steps, mask_t, mins_t, maxs_t)
+    attacked_inputs, _ = generate_adversarial_examples(
+        source_model, x_eval, y_eval, attack, epsilon, config,
+        metadata["numeric_mask"], metadata["numeric_mins"], metadata["numeric_maxs"],
+        device, config.batch_size, return_inputs=True,
+    )
 
     clean_pred = (predict_proba(target_model, x_eval, config.batch_size, device) >= 0.5).astype(int)
-    adv_pred = (predict_proba(target_model, x_adv.cpu().numpy(), config.batch_size, device) >= 0.5).astype(int)
+    adv_pred = (predict_proba(target_model, attacked_inputs, config.batch_size, device) >= 0.5).astype(int)
     y_int = y_eval.astype(int)
     correct = clean_pred == y_int
     if correct.sum() == 0:
@@ -82,34 +84,42 @@ def compute_transfer_asr(source_model, target_model, x_eval, y_eval, config, met
 def main() -> None:
     parser = build_parser(
         "Cross-backbone transfer attack experiment.",
-        defaults={"output_dir": "outputs"},
+        defaults={
+            "train_path": str(DEFAULT_DATA_DIR / "train.csv"),
+            "test_path": str(DEFAULT_DATA_DIR / "test.csv"),
+            "output_dir": str(DEFAULT_OUTPUT_ROOT),
+        },
         require_paths=False,
     )
     parser.add_argument("--eval-rows", type=int, default=20000,
                         help="number of test rows used for the transfer matrix")
-    parser.add_argument("--seeds", default="7,13,21,42,100")
+    parser.add_argument("--transfer-attack", default="pgd",
+                        help="attack used to generate the transferred examples")
+    parser.add_argument("--transfer-epsilon", type=float, default=0.10,
+                        help="perturbation budget of the transferred attack")
     args = parser.parse_args()
 
-    base_dir = Path(__file__).resolve().parent.parent
     config = config_from_args(
         args,
-        train_path=resolve_path(base_dir, args.train_path),
-        test_path=resolve_path(base_dir, args.test_path),
-        output_dir=resolve_path(base_dir, args.output_dir),
+        train_path=str(resolve_path(args.train_path)),
+        test_path=str(resolve_path(args.test_path)),
+        output_dir=str(resolve_path(args.output_dir)),
     )
     if args.print_config:
         emit_config(config)
-    seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
-    device = torch.device(config.device)
+    seeds = list(config.seeds)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     out_dir = Path(config.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[transfer] device={device} seeds={seeds}", flush=True)
+    print(f"[transfer] device={device} seeds={seeds} "
+          f"attack={args.transfer_attack} eps={args.transfer_epsilon}", flush=True)
 
     train_df, test_df = load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
     n_features = x_train.shape[1]
 
-    rng = np.random.RandomState(42)
+    rng = np.random.RandomState(config.eval_subset_seed)
     idx = rng.choice(len(x_test), min(args.eval_rows, len(x_test)), replace=False)
     x_eval, y_eval = x_test[idx], y_test[idx]
 
@@ -140,6 +150,7 @@ def main() -> None:
                     asr = compute_transfer_asr(
                         models[(source, condition)], models[(target, condition)],
                         x_eval, y_eval, config, metadata, device,
+                        attack=args.transfer_attack, epsilon=args.transfer_epsilon,
                     )
                     print(f"  [{condition:6s}] {source:16s} -> {target:16s}: ASR={asr * 100:.2f}%",
                           flush=True)

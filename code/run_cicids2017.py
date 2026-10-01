@@ -25,7 +25,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-import torch
 
 import ids_defense_selection as idsds
 
@@ -70,9 +69,9 @@ class CICExperimentConfig:
     adv_epsilon: float = 0.06
     adv_alpha: float = 0.015
     adv_steps: int = 20
-    epsilon_list: tuple[float, float, float] = (0.02, 0.05, 0.1)
+    epsilon_list: tuple[float, float, float] = idsds.DEFAULT_EPSILON_LIST
     eval_pgd_steps: int = 20
-    seeds: tuple[int, ...] = (7, 13, 21, 42, 100)
+    seeds: tuple[int, ...] = idsds.DEFAULT_SEEDS
     sensitivity_top_ratio: float = 0.3
     sensitivity_batches: int = 16
     validity_attack_settings: tuple[tuple[str, float], ...] = (("fgsm", 0.05), ("pgd", 0.1))
@@ -100,7 +99,7 @@ class CICExperimentConfig:
     sa_trades_gamma: float = 1.0
     dst_update_interval: int = 2
     dst_ema_alpha: float = 0.7
-    device: str = "cpu"
+    device: str = "auto"
     sample_seed: int = 2026
     rebuild_cache: bool = False
 
@@ -259,7 +258,8 @@ def plot_family_recall_drop(df: pd.DataFrame, output_path: Path) -> None:
 def run_experiment(config: CICExperimentConfig) -> None:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(config.device)
+    device = idsds.resolve_device(config.device)
+    idsds.log_device(config.device, device)
 
     sampled_df = sample_cicids_dataset(config)
     train_df, test_df = train_test_split(
@@ -566,21 +566,26 @@ def run_experiment(config: CICExperimentConfig) -> None:
 
 def parse_args() -> CICExperimentConfig:
     parser = argparse.ArgumentParser(description="Run CIC-IDS2017 adversarial robustness experiments.")
-    parser.add_argument("--data-dir", default="data/cicids2017")
-    parser.add_argument("--sampled-csv", default="data/cicids2017/cicids2017_sampled.csv")
-    parser.add_argument("--output-dir", default="outputs/cicids2017_run")
+    parser.add_argument("--data-dir", default=str(idsds.DEFAULT_DATA_DIR / "cicids2017"),
+                        help="directory with the daily CIC-IDS2017 csv files "
+                             "(relative paths resolve against the repository root)")
+    parser.add_argument("--sampled-csv",
+                        default=str(idsds.DEFAULT_DATA_DIR / "cicids2017" / "cicids2017_sampled.csv"))
+    parser.add_argument("--output-dir",
+                        default=str(idsds.DEFAULT_OUTPUT_ROOT / "cicids2017_run"))
     parser.add_argument("--chunk-size", type=int, default=100000)
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--baseline-epochs", type=int, default=8)
     parser.add_argument("--adv-epochs", type=int, default=6)
     parser.add_argument("--eval-attack-rows", type=int, default=30000)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--rebuild-cache", action="store_true")
     args = parser.parse_args()
     return CICExperimentConfig(
-        data_dir=args.data_dir,
-        sampled_csv=args.sampled_csv,
-        output_dir=args.output_dir,
+        data_dir=str(idsds.resolve_path(args.data_dir)),
+        sampled_csv=str(idsds.resolve_path(args.sampled_csv)),
+        output_dir=str(idsds.resolve_path(args.output_dir)),
         chunk_size=args.chunk_size,
         batch_size=args.batch_size,
         baseline_epochs=args.baseline_epochs,

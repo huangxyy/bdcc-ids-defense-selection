@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from .config import ExperimentConfig
+from .config import ATTACK_NAMES, ExperimentConfig
 from .data import numpy_to_torch
 
 
@@ -253,10 +253,6 @@ def compute_attack_validity_metrics(
         "protected_feature_change_ratio": protected_feature_change_ratio,
         "boundary_clip_ratio": boundary_clip_ratio,
     }
-
-
-#: Attack names accepted by :func:`generate_adversarial_examples`.
-ATTACK_NAMES = ("clean", "fgsm", "pgd", "cw", "apgd")
 
 
 def generate_adversarial_examples(

@@ -13,62 +13,66 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
 from ids_defense_selection import (
     BackboneRunFrames,
     CNN1DBackbone,
-    EVAL_SUBSET_SEED,
+    DEFAULT_DATA_DIR,
     EvaluationSet,
     build_features,
     build_parser,
     config_from_args,
+    default_output_dir,
     emit_config,
     evaluate_defenses,
     load_unsw_nb15,
+    log_device,
     make_dataloader,
+    resolve_device,
     resolve_path,
     set_seed,
+    split_summary,
     stratified_subset_indices,
     train_all_defenses,
     write_backbone_outputs,
 )
 
-#: Attack applied to the full test partition after training.
-FULL_TEST_ATTACK_SETTINGS: tuple[tuple[str, float], ...] = (("pgd", 0.10),)
-
 
 def main() -> None:
     parser = build_parser(
         "Run the 1D-CNN matched-budget IDS experiment.",
-        defaults={"output_dir": "outputs/cnn1d", "training_budget_mode": "matched_continuation"},
+        defaults={
+            "train_path": str(DEFAULT_DATA_DIR / "train.csv"),
+            "test_path": str(DEFAULT_DATA_DIR / "test.csv"),
+            "output_dir": str(default_output_dir("cnn")),
+            "training_budget_mode": "matched_continuation",
+        },
         require_paths=False,
     )
-    parser.add_argument("--full-test-attack-rows", type=int, default=0,
-                        help="attack only this many stratified test rows instead of the full test partition")
     args = parser.parse_args()
 
-    base_dir = Path(__file__).resolve().parent.parent
     config = config_from_args(
         args,
-        train_path=resolve_path(base_dir, args.train_path),
-        test_path=resolve_path(base_dir, args.test_path),
-        output_dir=resolve_path(base_dir, args.output_dir),
+        train_path=str(resolve_path(args.train_path)),
+        test_path=str(resolve_path(args.test_path)),
+        output_dir=str(resolve_path(args.output_dir)),
     )
     if args.print_config:
         emit_config(config)
 
     out_dir = Path(config.output_dir)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     print(
-        f"[cnn1d] output_dir={out_dir} device={config.device} "
+        f"[cnn1d] output_dir={out_dir} device={device} "
         f"training_budget_mode={config.training_budget_mode} seeds={config.seeds}",
         flush=True,
     )
 
     train_df, test_df = load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
-    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows, seed=EVAL_SUBSET_SEED)
+    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows,
+                                             seed=config.eval_subset_seed)
     eval_set = EvaluationSet(
         x_eval=x_test[eval_indices],
         y_eval=y_test[eval_indices],
@@ -85,6 +89,7 @@ def main() -> None:
     validity: list[pd.DataFrame] = []
     full_test_clean: list[pd.DataFrame] = []
     full_test_attack: list[pd.DataFrame] = []
+    adaptive_frames: list[pd.DataFrame] = []
 
     for seed in config.seeds:
         set_seed(seed)
@@ -102,8 +107,8 @@ def main() -> None:
         evaluation = evaluate_defenses(
             trained, config, eval_set, device, seed,
             include_categories=False,
-            full_test_attack_settings=FULL_TEST_ATTACK_SETTINGS,
-            full_test_attack_rows=args.full_test_attack_rows,
+            full_test_attack_settings=config.full_test_attack_settings,
+            full_test_attack_rows=config.full_test_attack_rows,
         )
         results.append(evaluation.metrics)
         sensitivity.append(trained.sensitivity_table)
@@ -111,6 +116,8 @@ def main() -> None:
         validity.append(evaluation.validity)
         full_test_clean.append(evaluation.full_test_clean)
         full_test_attack.append(evaluation.full_test_attack)
+        if not evaluation.adaptive.empty:
+            adaptive_frames.append(evaluation.adaptive)
         print(f"[cnn1d][seed {seed}] completed", flush=True)
 
     frames = BackboneRunFrames(
@@ -120,9 +127,13 @@ def main() -> None:
         validity=pd.concat(validity, ignore_index=True),
         full_test_clean=pd.concat(full_test_clean, ignore_index=True),
         full_test_attack=pd.concat(full_test_attack, ignore_index=True),
+        adaptive=(pd.concat(adaptive_frames, ignore_index=True) if adaptive_frames
+                  else pd.DataFrame()),
     )
     summary = {
         "architecture": "1D-CNN (Conv1d(1,32,3) -> Conv1d(32,64,3) -> AvgPool -> FC(64,32) -> FC(32,1))",
+        "resolved_device": str(device),
+        "dataset_split": split_summary(len(train_df), len(test_df)),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "eval_rows": int(len(eval_set.y_eval)),

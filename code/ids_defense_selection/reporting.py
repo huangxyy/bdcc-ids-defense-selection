@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import matplotlib
@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as scipy_stats
 
-from .config import ExperimentConfig
+from .config import ExperimentConfig, field_group, field_help
+from .style import get_color
 
 
 def plot_metric_curve(df: pd.DataFrame, metric: str, output_path: Path) -> None:
@@ -98,19 +99,13 @@ def plot_efficiency_tradeoff(efficiency_df: pd.DataFrame, result_df: pd.DataFram
     clean_df = result_df[result_df["attack"] == "clean"][["model", "f1"]].rename(columns={"f1": "clean_f1"})
     plot_df = efficiency_df.merge(robust_df, on="model").merge(clean_df, on="model")
 
-    colors = {
-        "standard": "#4472C4",
-        "adv_training": "#ED7D31",
-        "constrained_adv": "#70AD47",
-    }
-
     plt.figure(figsize=(7, 5))
     for row in plot_df.itertuples():
         plt.scatter(
             row.train_seconds,
             row.robust_f1,
             s=180,
-            color=colors.get(row.model, "#5B9BD5"),
+            color=get_color(row.model),
             alpha=0.9,
         )
         plt.annotate(
@@ -208,6 +203,60 @@ class BackboneRunFrames:
     validity: pd.DataFrame
     full_test_clean: pd.DataFrame
     full_test_attack: pd.DataFrame
+    adaptive: pd.DataFrame = field(default_factory=pd.DataFrame)
+
+
+def write_hyperparameter_table(config: ExperimentConfig, output_dir: Path) -> pd.DataFrame:
+    """Export every ExperimentConfig field (group, value, help) as a CSV table.
+
+    This is the machine-generated answer to the reviewer request for a table
+    with the hyperparameters of every defense strategy.
+    """
+    rows = []
+    for name in ExperimentConfig.__dataclass_fields__:
+        value = getattr(config, name)
+        rows.append({
+            "group": field_group(name),
+            "field": name,
+            "value": value if not isinstance(value, tuple) else ",".join(str(v) for v in value),
+            "help": field_help(name),
+        })
+    table = pd.DataFrame(rows)
+    table.to_csv(output_dir / "hyperparameters.csv", index=False)
+    return table
+
+
+def write_attack_generalization(
+    mean_results: pd.DataFrame,
+    config: ExperimentConfig,
+    output_dir: Path,
+) -> pd.DataFrame:
+    """Summarise robustness to attacks that are *not* used during training.
+
+    The defenses are trained with PGD (and PGD-derived losses); FGSM, C&W and
+    APGD are unseen attack families.  The table reports each model's metric at
+    the largest evaluation epsilon plus the ASR gap against PGD, which is the
+    attack-generalisation evidence requested in review.
+    """
+    if mean_results.empty or not config.epsilon_list:
+        return pd.DataFrame()
+    epsilon = max(config.epsilon_list)
+    subset = mean_results[
+        (mean_results["attack"] != "clean") & np.isclose(mean_results["epsilon"], epsilon)
+    ]
+    if subset.empty:
+        return pd.DataFrame()
+    pgd_asr = (subset[subset["attack"] == "pgd"]
+               .set_index("model")["attack_success_rate"])
+    table = subset[["model", "attack", "epsilon", "f1", "attack_success_rate"]].copy()
+    table["seen_in_training"] = table["attack"] == "pgd"
+    table["asr_gap_vs_pgd"] = table.apply(
+        lambda row: row["attack_success_rate"] - pgd_asr.get(row["model"], float("nan")),
+        axis=1,
+    )
+    table = table.sort_values(["model", "attack"]).reset_index(drop=True)
+    table.to_csv(output_dir / "attack_generalization.csv", index=False)
+    return table
 
 
 def write_backbone_outputs(
@@ -301,6 +350,18 @@ def write_backbone_outputs(
         full_attack_mean.to_csv(output_dir / "full_test_attack_mean.csv", index=False)
         full_attack_std.to_csv(output_dir / "full_test_attack_std.csv", index=False)
 
+    if not frames.adaptive.empty:
+        frames.adaptive.to_csv(output_dir / "adaptive_attack_raw.csv", index=False)
+        adaptive_mean = (
+            frames.adaptive.drop(columns=["seed"])
+            .groupby(["model", "epsilon"], as_index=False)
+            .mean(numeric_only=True)
+        )
+        adaptive_mean.to_csv(output_dir / "adaptive_attack_mean.csv", index=False)
+
+    write_hyperparameter_table(config, output_dir)
+    generalization_df = write_attack_generalization(mean_df, config, output_dir)
+
     significance_df = compute_significance_tests(frames.results, config.epsilon_list)
     if not significance_df.empty:
         significance_df.to_csv(output_dir / "significance_tests.csv", index=False)
@@ -310,7 +371,7 @@ def write_backbone_outputs(
     plot_clean_f1_bar(mean_df, output_dir / "clean_f1_bar.png")
     plot_efficiency_tradeoff(efficiency_mean_df, mean_df, output_dir / "efficiency_tradeoff.png")
 
-    summary_payload = {"config": asdict(config), **summary}
+    summary_payload = {"config": config.grouped(), **summary}
     (output_dir / "run_summary.json").write_text(
         json.dumps(summary_payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return {
@@ -318,4 +379,5 @@ def write_backbone_outputs(
         "std_results": std_df,
         "efficiency_mean": efficiency_mean_df,
         "validity_mean": validity_mean_df,
+        "attack_generalization": generalization_df,
     }

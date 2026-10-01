@@ -6,6 +6,7 @@ the official split this module produces 194 transformed features
 (39 continuous + 155 one-hot); the manuscript reports 190, which corresponds to
 the reversed split used in the submitted experiments.
 """
+
 from __future__ import annotations
 
 import os
@@ -39,9 +40,15 @@ def set_seed(seed: int) -> None:
 
 
 def load_unsw_nb15(train_path: str, test_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load the two official UNSW-NB15 partitions."""
-    train_df = pd.read_csv(train_path)
-    test_df = pd.read_csv(test_path)
+    """Load the two official UNSW-NB15 partitions.
+
+    ``utf-8-sig`` transparently strips a leading byte-order mark, which the
+    distributed CSV files carry.  Without it the first column would be named
+    ``"\\ufeffid"``, survive the ``id`` drop and leak the row number into the
+    feature matrix as an extra continuous feature.
+    """
+    train_df = pd.read_csv(train_path, encoding="utf-8-sig")
+    test_df = pd.read_csv(test_path, encoding="utf-8-sig")
     return train_df, test_df
 
 

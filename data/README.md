@@ -1,5 +1,7 @@
 # Data
 
+**English** | [简体中文](README.zh-CN.md)
+
 The datasets are **not** included in this repository. Download them and place the files here.
 
 ## UNSW-NB15 (required)
@@ -24,6 +26,10 @@ uv run python code/prepare_data.py
 
 This counts the records in each file and compares them against the official partition sizes.
 It also checks that the required columns are present.
+
+Both the validator and the training code read the CSVs with ``utf-8-sig``, so the byte-order
+mark shipped with the distributed files is stripped automatically (otherwise the first column
+would be ``"\\ufeffid"`` and the ``id`` drop would miss it).
 
 ### If the two files are reversed
 

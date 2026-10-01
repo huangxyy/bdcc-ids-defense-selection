@@ -11,16 +11,16 @@ kept separate on purpose.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
-import torch
-
 from ids_defense_selection import (
+    DEFAULT_DATA_DIR,
     FT_TRANSFORMER_KWARGS,
     FTTransformerBackbone,
     build_parser,
     config_from_args,
+    default_phi4_output_dir,
     emit_config,
+    log_device,
+    resolve_device,
     resolve_path,
 )
 from ids_defense_selection.phi4 import evaluate_phi4
@@ -30,25 +30,27 @@ def main() -> None:
     parser = build_parser(
         "Evaluate phi4 (worst-class recall) for the FT-Transformer backbone.",
         defaults={
-            "output_dir": "outputs/phi4_ft",
+            "train_path": str(DEFAULT_DATA_DIR / "train.csv"),
+            "test_path": str(DEFAULT_DATA_DIR / "test.csv"),
+            "output_dir": str(default_phi4_output_dir("ft")),
             "batch_size": 256,
             "adv_steps": 7,  # cheaper PGD used during training only
         },
         require_paths=False,
     )
     args = parser.parse_args()
-    base_dir = Path(__file__).resolve().parent.parent
     config = config_from_args(
         args,
-        train_path=resolve_path(base_dir, args.train_path),
-        test_path=resolve_path(base_dir, args.test_path),
-        output_dir=resolve_path(base_dir, args.output_dir),
+        train_path=str(resolve_path(args.train_path)),
+        test_path=str(resolve_path(args.test_path)),
+        output_dir=str(resolve_path(args.output_dir)),
     )
     if args.print_config:
         emit_config(config)
 
-    device = torch.device(config.device)
-    print(f"[phi4-ft] output_dir={config.output_dir} device={config.device} seeds={config.seeds}",
+    device = resolve_device(config.device)
+    log_device(config.device, device)
+    print(f"[phi4-ft] output_dir={config.output_dir} device={device} seeds={config.seeds}",
           flush=True)
     evaluate_phi4(
         config,

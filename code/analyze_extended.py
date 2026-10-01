@@ -1,19 +1,18 @@
 """
-Phase 2: Extended SCI-level analysis.
-Trains all 6 models per seed, then runs:
+Extended robustness analysis.
+Trains all six defenses per seed, then runs:
   - Fine-grained epsilon sweep (10 PGD points)
   - ROC curves (clean + attacked)
   - Gradient masking detection
   - Full test set PGD attack evaluation
 
 Usage:
-  python code/extended_analysis.py --device cuda --output-dir outputs/v2_run
+  uv run python code/analyze_extended.py --device cuda --output-dir outputs/extended_analysis
 """
 from __future__ import annotations
 
 import argparse
 import copy
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -25,6 +24,8 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_curve, roc_auc_score
 
 import ids_defense_selection as idsds
+from ids_defense_selection import style as FS
+from ids_defense_selection.paths import DEFAULT_OUTPUT_ROOT, resolve_path
 
 for fn in ["SimHei", "Microsoft YaHei"]:
     try:
@@ -36,14 +37,10 @@ for fn in ["SimHei", "Microsoft YaHei"]:
 plt.rcParams["axes.unicode_minus"] = False
 
 EPSILON_SWEEP = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.12, 0.15]
-SEEDS = (7, 13, 21, 42, 100)
-MODEL_NAMES = ["standard", "adv_training", "constrained_adv", "trades", "free_at", "class_aware_constrained"]
-MODEL_LABELS = {
-    "standard": "Standard", "adv_training": "Adv Training",
-    "constrained_adv": "Constrained Adv", "trades": "TRADES",
-    "free_at": "Free AT", "class_aware_constrained": "Class-Aware",
-}
-COLORS = ["#2c3e50", "#e74c3c", "#3498db", "#27ae60", "#f39c12", "#8e44ad"]
+SEEDS = idsds.DEFAULT_SEEDS
+MODEL_NAMES = list(idsds.DEFENSE_ORDER)
+MODEL_LABELS = {name: FS.get_label(name) for name in MODEL_NAMES}
+COLORS = [FS.get_color(name) for name in MODEL_NAMES]
 
 
 def train_all_models(config, train_loader, baseline_model, device, metadata):
@@ -243,19 +240,20 @@ def plot_gradient_masking(grad_df, output_path):
 # ---------------------------------------------------------------- entry point
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cpu")
-    parser.add_argument("--output-dir", default="outputs/v2_run")
+    parser.add_argument("--device", default="auto",
+                        help="torch device: auto, cpu, cuda, cuda:N or mps")
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_ROOT / "extended_analysis"),
+                        help="output directory (relative paths resolve against the repository root)")
     args = parser.parse_args()
 
-    base_dir = Path(__file__).resolve().parent.parent
-    output_dir = Path(args.output_dir)
-    out_dir = output_dir if output_dir.is_absolute() else (base_dir / output_dir)
+    out_dir = resolve_path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(args.device)
+    device = idsds.resolve_device(args.device)
+    idsds.log_device(args.device, device)
 
     config = idsds.ExperimentConfig(
-        train_path=str(base_dir / "data" / "train.csv"),
-        test_path=str(base_dir / "data" / "test.csv"),
+        train_path=str(idsds.DEFAULT_DATA_DIR / "train.csv"),
+        test_path=str(idsds.DEFAULT_DATA_DIR / "test.csv"),
         output_dir=str(out_dir),
         device=args.device,
     )
@@ -263,7 +261,8 @@ def main():
     train_df, test_df = idsds.load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = idsds.build_features(train_df, test_df)
 
-    eval_indices = idsds.stratified_subset_indices(y_test, config.eval_attack_rows, seed=2026)
+    eval_indices = idsds.stratified_subset_indices(y_test, config.eval_attack_rows,
+                                                   seed=config.eval_subset_seed)
     eval_x, eval_y = x_test[eval_indices], y_test[eval_indices]
 
     all_eps_sweep = []

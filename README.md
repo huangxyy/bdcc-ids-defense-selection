@@ -1,6 +1,8 @@
 # A Backbone-Conditioned Pareto Analysis Framework
 ## for Preference-Aware IDS Defense Selection
 
+**English** | [简体中文](README.zh-CN.md)
+
 Reference implementation and evaluation code for the paper:
 
 > **A Backbone-Conditioned Pareto Analysis Framework for Preference-Aware IDS Defense Selection**  
@@ -33,13 +35,16 @@ uv run python code/prepare_data.py
 uv run python code/smoke_test.py
 
 # 3. the full reproduction
-uv run python run_experiments.py --device cuda
+uv run python run_experiments.py
 ```
 
 `uv run` executes the command inside the project environment, so no manual activation is
 needed; every `python ...` example below is meant to be run the same way
 (`uv run python ...`). The interpreter is pinned by `.python-version` and uv installs it
 automatically when missing.
+
+All paths are resolved against the repository root, so every documented command can be
+started from any working directory.
 
 Run `uv run python run_experiments.py --dry-run` to see the exact commands without executing them.
 
@@ -64,7 +69,8 @@ checking, which silently reverses the split. `code/prepare_data.py` detects that
 uv run python code/prepare_data.py --fix-swap
 ```
 
-CIC-IDS2017 is optional and only needed by the cross-dataset scripts; see `data/README.md`.
+CIC-IDS2017 is optional and only needed by the cross-dataset scripts; see `data/README.md`
+(also available in [简体中文](data/README.zh-CN.md)).
 
 ---
 
@@ -91,6 +97,7 @@ bdcc-ids-defense-selection/
 │   │   └── style.py                          # shared matplotlib style + palette
 │   ├── prepare_data.py                       # validate / repair the dataset layout
 │   ├── smoke_test.py                         # fast end-to-end sanity check
+│   ├── check_devices.py                      # CPU / CUDA / MPS availability report
 │   ├── run_mlp.py                            # MLP experiment
 │   ├── run_cnn1d.py                          # 1D-CNN experiment
 │   ├── run_ft_transformer.py                 # FT-Transformer experiment
@@ -125,6 +132,20 @@ reported tables. The adaptive attack suite lives in
 
 ## Running the experiments
 
+### Device selection
+
+`--device` accepts `auto` (the default), `cpu`, `cuda`, `cuda:N` and `mps`. `auto` picks CUDA
+when a GPU is visible, then Apple MPS, then CPU; an explicit `cuda` request on a CPU-only
+machine fails immediately with a clear message instead of a deep torch error. The resolved
+device is printed at startup and recorded as `resolved_device` in `run_summary.json`.
+
+```bash
+uv run python code/check_devices.py                  # inspect CPU / CUDA / MPS
+uv run python run_experiments.py                     # auto-selects the device
+uv run python code/run_mlp.py --device cpu           # pin CPU
+uv run python code/run_mlp.py --device cuda:1        # pin a specific GPU
+```
+
 ### Full pipeline
 
 ```bash
@@ -143,9 +164,20 @@ std_results.csv           same cells, standard deviation over seeds
 raw_results.csv           one row per seed
 significance_tests.csv    paired t-test and Wilcoxon between defenses
 efficiency_mean.csv       parameter count, training seconds, inference latency
+attack_generalization.csv robustness to attacks that were never used in training
+hyperparameters.csv       every ExperimentConfig field (group, value, help)
 run_summary.json          the complete configuration actually used
 risk_profile_4d.csv       the four-dimensional profile and the Pareto flag
 ```
+
+The attack applied to the test partition after training is configurable as well:
+`--full-test-attack-settings pgd:0.10` selects the attack and its budget, and
+`--full-test-attack-rows 0` (the default) attacks the complete partition.
+
+The adaptive attack suite (restart PGD, gradient-free NES and the complement attack against
+masked defenses) is opt-in because it is expensive: add `--adaptive-eval` (optionally
+`--adaptive-steps`, `--adaptive-restarts`, `--adaptive-epsilon`) and the run also writes
+`adaptive_attack_raw.csv` / `adaptive_attack_mean.csv`.
 
 ### Worst-class recall (phi4), five seeds
 
@@ -164,6 +196,17 @@ and evaluates with `--eval-pgd-steps 20`; the two budgets are recorded separatel
 ```bash
 uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 ```
+
+The decision step now accounts for run-to-run variation and can enforce minimum standards:
+
+```bash
+# uncertainty-aware Pareto (mean +/- 1 std), drop candidates below the thresholds
+uv run python code/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
+```
+
+`risk_profile_4d.csv` carries the per-objective standard deviations and both the
+uncertainty-aware and the point-estimate Pareto flags; `outputs/decision_settings.json`
+records the thresholds and margin that produced the recommendations.
 
 ### Expected runtime
 
@@ -188,10 +231,11 @@ The FT-Transformer dominates the total cost. All backbones also run on CPU, subs
 | Batch size | 1024 (MLP, 1D-CNN); 512 (FT-Transformer) |
 | Dropout | 0.15 |
 | Random seeds | 7, 13, 21, 42, 100 (set with --seeds) |
-| Evaluation subset | 20,000 stratified test samples, fixed seed 2026, shared by all defenses |
+| Evaluation subset | 20,000 stratified test samples (`--eval-attack-rows`), fixed seed 2026 (`--eval-subset-seed`), shared by all defenses |
 | **Adversarial training budget** | **epsilon = 0.06, alpha = 0.015, 20 steps** (FT-Transformer: 7 training steps) |
 | Evaluation budgets | epsilon in {0.02, 0.05, 0.10} |
 | Evaluation PGD steps | 20 (`--eval-pgd-steps`), independent of the training budget |
+| Device | `auto` (CUDA → MPS → CPU); pin with `--device cpu`, `cuda` or `cuda:N` |
 
 | Defense | Training-time attack | Mask | Extra |
 |---|---|---|---|
@@ -217,8 +261,20 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 
 **Every field of `ExperimentConfig` is a command-line flag.** The flags are generated from the
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
-`ExperimentConfig` automatically adds a flag. All 44 fields are exposed identically by all three
+`ExperimentConfig` automatically adds a flag. All 51 fields are exposed identically by all three
 backbone scripts.
+
+Each field also carries its own help text and legacy flag aliases as dataclass metadata, and the
+values are validated as soon as the configuration is built: a typo such as `--batch-size 0`, an
+unknown attack name or a malformed tuple fails immediately with one readable message that lists
+every problem found.
+
+For maintenance and for reading an experiment at a glance, the same fields are exposed as seven
+immutable groups — `paths`, `training`, `attack`, `evaluation`, `methods`, `sensitivity` and
+`runtime` — and each group validates its own fields. `--print-config` and `run_summary.json` print
+the configuration in that structure, and the same views are available in Python
+(`config.training.batch_size`, `config.evaluation.epsilon_list`, `config.runtime.device`, ...)
+while the flat access used by the code (`config.batch_size`) keeps working unchanged.
 
 ```bash
 uv run python code/run_cnn1d.py --help              # the full list, with defaults

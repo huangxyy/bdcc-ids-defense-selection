@@ -10,7 +10,6 @@ from __future__ import annotations
 import copy
 import json
 import math
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +27,7 @@ from .data import (
     stratified_subset_indices,
 )
 from .defenses import compute_sensitivity_mask, fit_reference_models, fit_supervised, train_all_defenses
+from .device import log_device, resolve_device
 from .evaluation import (
     EvaluationSet,
     classification_metrics,
@@ -45,19 +45,19 @@ from .reporting import (
     plot_ratio_ablation,
     plot_transfer_heatmap,
     summarize_results,
+    write_attack_generalization,
+    write_hyperparameter_table,
 )
-
-#: Seed of the fixed stratified evaluation subset shared by every defense/backbone.
-EVAL_SUBSET_SEED = 2026
-
+from .spec import split_summary
 
 def run_mlp_experiment(config: ExperimentConfig) -> None:
     """Train and evaluate every defense on the MLP backbone. Writes all outputs."""
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(config.device)
+    device = resolve_device(config.device)
+    log_device(config.device, device)
     print(
-        f"[mlp] output_dir={output_dir} device={config.device} "
+        f"[mlp] output_dir={output_dir} device={device} "
         f"training_budget_mode={config.training_budget_mode} seeds={config.seeds}",
         flush=True,
     )
@@ -65,7 +65,8 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     train_df, test_df = load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
 
-    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows, seed=EVAL_SUBSET_SEED)
+    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows,
+                                             seed=config.eval_subset_seed)
     eval_x = x_test[eval_indices]
     eval_y = y_test[eval_indices]
     eval_attack_categories, top_attack_categories = prepare_attack_categories(
@@ -84,6 +85,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     validity_frames: list[pd.DataFrame] = []
     category_frames: list[pd.DataFrame] = []
     full_test_frames: list[pd.DataFrame] = []
+    adaptive_frames: list[pd.DataFrame] = []
     transfer_frames: list[pd.DataFrame] = []
     reference_clean_rows: list[dict] = []
     ratio_rows: list[dict] = []
@@ -120,6 +122,8 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
         validity_frames.append(evaluation.validity)
         category_frames.append(evaluation.categories)
         full_test_frames.append(evaluation.full_test_clean)
+        if not evaluation.adaptive.empty:
+            adaptive_frames.append(evaluation.adaptive)
 
         # --- non-neural reference models ----------------------------------
         reference_models, reference_train_seconds = fit_reference_models(
@@ -189,6 +193,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     _write_mlp_outputs(
         config=config,
         output_dir=output_dir,
+        device=device,
         train_df=train_df,
         test_df=test_df,
         y_train=y_train,
@@ -201,6 +206,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
         validity_frames=validity_frames,
         category_frames=category_frames,
         full_test_frames=full_test_frames,
+        adaptive_frames=adaptive_frames,
         transfer_frames=transfer_frames,
         reference_clean_rows=reference_clean_rows,
         ratio_rows=ratio_rows,
@@ -211,6 +217,7 @@ def _write_mlp_outputs(
     *,
     config: ExperimentConfig,
     output_dir: Path,
+    device: torch.device,
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     y_train: np.ndarray,
@@ -223,6 +230,7 @@ def _write_mlp_outputs(
     validity_frames: list[pd.DataFrame],
     category_frames: list[pd.DataFrame],
     full_test_frames: list[pd.DataFrame],
+    adaptive_frames: list[pd.DataFrame],
     transfer_frames: list[pd.DataFrame],
     reference_clean_rows: list[dict],
     ratio_rows: list[dict],
@@ -345,12 +353,27 @@ def _write_mlp_outputs(
     efficiency_df.to_csv(output_dir / "efficiency_raw.csv", index=False)
     efficiency_mean_df.to_csv(output_dir / "efficiency_mean.csv", index=False)
 
+    if adaptive_frames:
+        adaptive_df = pd.concat(adaptive_frames, ignore_index=True)
+        adaptive_df.to_csv(output_dir / "adaptive_attack_raw.csv", index=False)
+        adaptive_df.drop(columns=["seed"]).groupby(
+            ["model", "epsilon"], as_index=False
+        ).mean(numeric_only=True).to_csv(output_dir / "adaptive_attack_mean.csv", index=False)
+
+    write_hyperparameter_table(config, output_dir)
+    write_attack_generalization(mean_df, config, output_dir)
+
     plot_metric_curve(mean_df, "f1", output_dir / "f1_curve.png")
     plot_metric_curve(mean_df, "recall", output_dir / "recall_curve.png")
     plot_clean_f1_bar(mean_df, output_dir / "clean_f1_bar.png")
-    transfer_heatmap_df = transfer_mean_df[
-        (transfer_mean_df["attack"] == "pgd") & (np.isclose(transfer_mean_df["epsilon"], 0.1))]
-    plot_transfer_heatmap(transfer_heatmap_df, output_dir / "transfer_pgd_heatmap.png")
+    heatmap_setting = reference_transfer_setting(config)
+    if heatmap_setting is not None:
+        heatmap_attack, heatmap_epsilon = heatmap_setting
+        transfer_heatmap_df = transfer_mean_df[
+            (transfer_mean_df["attack"] == heatmap_attack)
+            & np.isclose(transfer_mean_df["epsilon"], heatmap_epsilon)]
+        plot_transfer_heatmap(transfer_heatmap_df,
+                              output_dir / f"transfer_{heatmap_attack}_heatmap.png")
     plot_ratio_ablation(ratio_mean_df, output_dir / "ratio_ablation.png")
     plot_efficiency_tradeoff(efficiency_mean_df, mean_df, output_dir / "efficiency_tradeoff.png")
     print("[mlp] aggregations and plots completed", flush=True)
@@ -369,7 +392,9 @@ def _write_mlp_outputs(
 
     summary = {
         "architecture": f"MLP {config.hidden_dims}",
-        "config": asdict(config),
+        "resolved_device": str(device),
+        "dataset_split": split_summary(len(train_df), len(test_df)),
+        "config": config.grouped(),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "eval_rows": int(len(y_test)),
@@ -395,3 +420,11 @@ def prepare_attack_categories(test_df: pd.DataFrame, eval_indices: np.ndarray,
         .index.tolist()
     )
     return categories, top
+
+
+def reference_transfer_setting(config: ExperimentConfig) -> tuple[str, float] | None:
+    """Transfer setting used for the heatmap: PGD if configured, else the last one."""
+    for attack, epsilon in config.transfer_attack_settings:
+        if attack == "pgd":
+            return attack, epsilon
+    return config.transfer_attack_settings[-1] if config.transfer_attack_settings else None

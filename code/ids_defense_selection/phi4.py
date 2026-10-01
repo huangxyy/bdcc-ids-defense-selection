@@ -18,7 +18,7 @@ from .config import ExperimentConfig
 from .data import build_features, load_unsw_nb15, make_dataloader, set_seed, stratified_subset_indices
 from .defenses import DEFENSE_ORDER, train_all_defenses
 from .evaluation import evaluate_category_recall
-from .experiment import EVAL_SUBSET_SEED, prepare_attack_categories
+from .experiment import prepare_attack_categories
 
 
 def evaluate_phi4(
@@ -37,7 +37,8 @@ def evaluate_phi4(
 
     train_df, test_df = load_unsw_nb15(config.train_path, config.test_path)
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
-    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows, seed=EVAL_SUBSET_SEED)
+    eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows,
+                                             seed=config.eval_subset_seed)
     eval_x = x_test[eval_indices]
     eval_y = y_test[eval_indices]
     categories, top_categories = prepare_attack_categories(
