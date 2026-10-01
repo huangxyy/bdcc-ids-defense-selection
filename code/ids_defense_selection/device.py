@@ -106,4 +106,17 @@ def device_report() -> str:
         "== suggestion ==",
         f"--device auto -> {resolve_device('auto')}",
     ]
+    if torch.version.cuda is None:
+        lines += [
+            "torch is a CPU-only build; install a CUDA wheel that matches the driver",
+            "shown by nvidia-smi, e.g. for CUDA 13.0:",
+            "  uv pip install --python .venv/bin/python --reinstall torch "
+            "--index-url https://download.pytorch.org/whl/cu130",
+            "other builds: https://download.pytorch.org/whl/ (cu130 / cu128 / cu118 / ...)",
+        ]
+    elif not torch.cuda.is_available():
+        lines += [
+            "torch has CUDA support but no GPU is visible; check the driver "
+            "(nvidia-smi) or install a wheel matching the driver's CUDA version.",
+        ]
     return "\n".join(lines)

@@ -45,6 +45,41 @@ uv run python run_experiments.py
 
 ---
 
+## 在 GPU 服务器上运行
+
+解释器由 `.python-version`（`3.12`）固定、依赖由 `uv.lock` 固定，所以一台新服务器只需要装
+uv，不需要 root，也不用自己配 CUDA 工具链：
+
+```bash
+# 只需要执行一次，无需 root
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+cd bdcc-ids-defense-selection
+uv sync                       # 自动下载 CPython 3.12 与锁定的 CUDA 版 torch
+uv run python code/check_devices.py
+```
+
+`check_devices.py` 会打印 torch 的 CUDA 构建、每块可见 GPU（型号/显存/算力）以及 `auto`
+解析到的设备；同样的值会写进每次运行的 `run_summary.json`（`resolved_device`），因此不会
+出现悄悄退回 CPU 的情况。
+
+如果 `check_devices.py` 显示没有可用 GPU、而 `nvidia-smi` 能看到显卡，说明 torch 的 CUDA
+构建与驱动不匹配，改装对应 CUDA 版本的轮子：
+
+```bash
+# 例：CUDA 13.0 版本（RTX 50 系 / Blackwell 需要较新的 CUDA 构建）
+uv pip install --python .venv/bin/python --reinstall torch \
+    --index-url https://download.pytorch.org/whl/cu130
+uv run python code/check_devices.py     # 期望 "available    : True"
+```
+
+其它版本（`cu128`、`cu126`、`cu118` 等）见 <https://download.pytorch.org/whl/>。
+这种安装方式不受 `uv.lock` 约束，之后再执行普通的 `uv sync` 会恢复锁定的 torch；
+如果 GPU 又不可用，重跑上面的命令即可。实测参考：驱动 595 / CUDA 13.2 + RTX 5090
+可以直接使用默认的 `uv sync` 安装。
+
+---
+
 ## 数据集
 
 仓库**不包含**数据。请从 <https://research.unsw.edu.au/projects/unsw-nb15-dataset>

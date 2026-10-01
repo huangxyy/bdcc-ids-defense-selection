@@ -50,6 +50,41 @@ Run `uv run python run_experiments.py --dry-run` to see the exact commands witho
 
 ---
 
+## Running on a GPU server
+
+The interpreter is pinned by `.python-version` (`3.12`) and the dependencies by `uv.lock`, so a
+fresh server only needs uv — no root and no manual CUDA toolchain setup:
+
+```bash
+# once, no root required
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+cd bdcc-ids-defense-selection
+uv sync                       # downloads CPython 3.12 + the locked CUDA build of torch
+uv run python code/check_devices.py
+```
+
+`check_devices.py` prints the torch CUDA build, every visible GPU (name, memory, compute
+capability) and the device `auto` resolves to; the same value is recorded in every
+`run_summary.json` as `resolved_device`, so a silent CPU fallback cannot happen.
+
+If `check_devices.py` reports no usable GPU while `nvidia-smi` shows one, the installed torch
+wheel does not match the driver. Install the wheel for your driver's CUDA version:
+
+```bash
+# example: CUDA 13.0 wheels (RTX 50-series / Blackwell need a recent CUDA build)
+uv pip install --python .venv/bin/python --reinstall torch \
+    --index-url https://download.pytorch.org/whl/cu130
+uv run python code/check_devices.py     # expect "available    : True"
+```
+
+Other indices (`cu128`, `cu126`, `cu118`, ...) live at <https://download.pytorch.org/whl/>.
+A wheel installed this way is outside `uv.lock`; a later plain `uv sync` restores the locked
+torch, so re-run the command if the GPU disappears again. As a sanity check, a machine with
+driver 595 / CUDA 13.2 and an RTX 5090 works with the default `uv sync` install.
+
+---
+
 ## Dataset
 
 The data is **not** shipped with this repository. Download UNSW-NB15 from
