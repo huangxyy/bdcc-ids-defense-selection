@@ -22,9 +22,11 @@ from ids_defense_selection.config import (
     TrainingConfig,
     build_parser,
     config_from_args,
+    default_rows,
     emit_config,
     field_group,
     field_help,
+    format_default_config,
     parse_tuple_value,
 )
 from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, default_output_dir, resolve_path
@@ -260,3 +262,21 @@ def test_default_dataset_paths_are_repo_root_based() -> None:
     assert Path(args.test_path).is_absolute()
     assert Path(args.train_path).name == "train.csv"
     assert Path(args.test_path).name == "test.csv"
+
+
+def test_default_config_report_covers_every_flag() -> None:
+    """`python -m ids_defense_selection.config` must list every flag exactly once."""
+    rows = default_rows()
+    flags = [flag for _, flag, _, _ in rows]
+    expected = {"--" + name.replace("_", "-") for name in ExperimentConfig.__dataclass_fields__}
+    assert set(flags) == expected
+    assert len(flags) == len(set(flags))
+    assert [group for group, _, _, _ in rows] == sorted(
+        (group for group, _, _, _ in rows), key=GROUP_ORDER.index)
+
+    report = format_default_config()
+    assert "MISSING" not in report
+    assert "--train-path" in report and "<required>" in report
+    for _, flag, _, help_text in rows:
+        assert flag in report
+        assert help_text in report

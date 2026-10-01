@@ -36,10 +36,12 @@ _EXPORTS: dict[str, str] = {
     "add_config_arguments": ".config",
     "build_parser": ".config",
     "config_from_args": ".config",
+    "default_rows": ".config",
     "emit_config": ".config",
     "field_aliases": ".config",
     "field_group": ".config",
     "field_help": ".config",
+    "format_default_config": ".config",
     "parse_args": ".config",
     "parse_tuple_value": ".config",
     # paths
