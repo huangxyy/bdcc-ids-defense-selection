@@ -4,7 +4,14 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from pareto_selection import build_objective_matrix, is_pareto_optimal, select_defense
+from pareto_selection import (
+    apply_admissibility,
+    build_objective_matrices,
+    build_objective_matrix,
+    is_pareto_optimal,
+    is_pareto_optimal_uncertain,
+    select_defense,
+)
 
 
 def _toy_objectives() -> np.ndarray:
@@ -68,3 +75,84 @@ def test_build_objective_matrix_aligns_the_four_objectives() -> None:
     assert objectives.loc["adv_training", "phi2"] == 0.80
     assert objectives.loc["adv_training", "phi3"] == 0.25
     assert objectives.loc["standard", "phi4"] == 0.50
+
+
+def _matrix(rows: list[list[float]], models: list[str]) -> pd.DataFrame:
+    return pd.DataFrame(rows, index=models, columns=["phi1", "phi2", "phi3", "phi4"])
+
+
+def test_uncertainty_aware_dominance_matches_point_estimates_at_margin_zero() -> None:
+    means = _matrix([[0.80, 0.50, 0.10, 0.05],
+                     [0.90, 0.90, 0.30, 0.20],
+                     [0.85, 0.60, 0.40, 0.10]], ["a", "b", "c"])
+    zero_std = pd.DataFrame(0.0, index=means.index, columns=means.columns)
+    assert (is_pareto_optimal_uncertain(means, zero_std, 0.0)
+            == is_pareto_optimal(means.values)).all()
+
+
+def test_uncertainty_aware_dominance_keeps_statistically_close_candidates() -> None:
+    # point estimates say "a dominates b"; one std of noise makes it a tie
+    means = _matrix([[0.90, 0.80, 0.50, 0.20], [0.89, 0.79, 0.50, 0.20]], ["a", "b"])
+    stds = pd.DataFrame(0.02, index=means.index, columns=means.columns)
+
+    assert is_pareto_optimal(means.values).tolist() == [True, False]
+    assert is_pareto_optimal_uncertain(means, stds, margin=1.0).tolist() == [True, True]
+    # a candidate that is clearly better on every objective still dominates
+    strong = _matrix([[0.95, 0.90, 0.60, 0.30], [0.89, 0.79, 0.50, 0.20]], ["a", "b"])
+    assert is_pareto_optimal_uncertain(strong, stds, margin=1.0).tolist() == [True, False]
+
+
+def test_admissibility_thresholds_filter_candidates() -> None:
+    means = _matrix([[0.90, 0.60, 1.00, 0.05],
+                     [0.88, 0.90, 0.40, 0.20]], ["standard", "trades"])
+    mask = apply_admissibility(means, min_phi2=0.80, min_phi4=0.10)
+    assert mask.tolist() == [False, True]
+    assert apply_admissibility(means).all()          # thresholds off by default
+
+
+def test_objective_matrices_report_per_seed_dispersion() -> None:
+    mean_results = pd.DataFrame({
+        "model": ["standard", "standard", "trades", "trades"],
+        "attack": ["clean", "pgd", "clean", "pgd"],
+        "epsilon": [0.0, 0.10, 0.0, 0.10],
+        "f1": [0.90, 0.60, 0.88, 0.84],
+        "attack_success_rate": [0.0, 0.40, 0.0, 0.16],
+    })
+    std_results = pd.DataFrame({
+        "model": ["standard", "standard", "trades", "trades"],
+        "attack": ["clean", "pgd", "clean", "pgd"],
+        "epsilon": [0.0, 0.10, 0.0, 0.10],
+        "f1": [0.010, 0.020, 0.008, 0.012],
+        "attack_success_rate": [0.0, 0.050, 0.0, 0.020],
+    })
+    efficiency_raw = pd.DataFrame({
+        "seed": [1, 1, 2, 2],
+        "model": ["standard", "trades", "standard", "trades"],
+        "train_seconds": [100.0, 400.0, 110.0, 330.0],
+    })
+    category_raw = pd.DataFrame({
+        "seed": [1, 1, 2, 2],
+        "model": ["standard", "trades", "standard", "trades"],
+        "attack": ["pgd"] * 4,
+        "epsilon": [0.10] * 4,
+        "attack_cat": ["A", "A", "B", "B"],
+        "adv_recall": [0.30, 0.70, 0.10, 0.80],
+    })
+    data = {"mean_results": mean_results, "std_results": std_results,
+            "efficiency_mean": pd.DataFrame({"model": ["standard", "trades"],
+                                             "relative_train_cost_vs_standard": [1.0, 4.0]}),
+            "efficiency_raw": efficiency_raw,
+            "category_mean_results": pd.DataFrame({
+                "model": ["standard", "trades"], "attack": ["pgd", "pgd"],
+                "epsilon": [0.10, 0.10], "adv_recall": [0.20, 0.75]}),
+            "category_raw_results": category_raw}
+
+    means, stds = build_objective_matrices(data, ref_attack="pgd", ref_epsilon=0.10)
+    assert means.loc["trades", "phi2"] == 0.84
+    assert np.isclose(stds.loc["standard", "phi2"], 0.05)
+    assert np.isclose(stds.loc["trades", "phi1"], 0.008)
+    # phi3 = 1 / relative cost (per-seed mean of 4.0 and 3.0 -> 3.5)
+    assert np.isclose(means.loc["trades", "phi3"], 1 / 3.5)
+    # phi4: per-seed min over categories, then mean  (0.30 and 0.10 -> 0.20)
+    assert np.isclose(means.loc["standard", "phi4"], 0.20)
+    assert np.isclose(stds.loc["standard", "phi4"], np.std([0.30, 0.10], ddof=1))

@@ -34,6 +34,7 @@ from ids_defense_selection import (
     resolve_path,
     resolve_device,
     set_seed,
+    split_summary,
     stratified_subset_indices,
     train_all_defenses,
     write_backbone_outputs,
@@ -95,6 +96,7 @@ def main() -> None:
     full_test_clean: list[pd.DataFrame] = []
     full_test_attack: list[pd.DataFrame] = []
     category_frames: list[pd.DataFrame] = []
+    adaptive_frames: list[pd.DataFrame] = []
 
     for seed in config.seeds:
         set_seed(seed)
@@ -121,6 +123,8 @@ def main() -> None:
         validity.append(evaluation.validity)
         full_test_clean.append(evaluation.full_test_clean)
         full_test_attack.append(evaluation.full_test_attack)
+        if not evaluation.adaptive.empty:
+            adaptive_frames.append(evaluation.adaptive)
         if not evaluation.categories.empty:
             category_frames.append(evaluation.categories)
         print(f"[ft_transformer][seed {seed}] completed", flush=True)
@@ -132,6 +136,8 @@ def main() -> None:
         validity=pd.concat(validity, ignore_index=True),
         full_test_clean=pd.concat(full_test_clean, ignore_index=True),
         full_test_attack=pd.concat(full_test_attack, ignore_index=True),
+        adaptive=(pd.concat(adaptive_frames, ignore_index=True) if adaptive_frames
+                  else pd.DataFrame()),
     )
     reference_model = FTTransformerBackbone(x_train.shape[1], **FT_TRANSFORMER_KWARGS)
 
@@ -161,6 +167,7 @@ def main() -> None:
             f"d_ffn={FT_TRANSFORMER_KWARGS['d_ffn']}), head: LayerNorm+Linear)"
         ),
         "resolved_device": str(device),
+        "dataset_split": split_summary(len(train_df), len(test_df)),
         "parameter_count": count_parameters(reference_model),
         "adv_steps_training": int(config.adv_steps),
         "adv_steps_evaluation": int(config.eval_pgd_steps),

@@ -27,6 +27,10 @@ uv run python code/prepare_data.py
 This counts the records in each file and compares them against the official partition sizes.
 It also checks that the required columns are present.
 
+Both the validator and the training code read the CSVs with ``utf-8-sig``, so the byte-order
+mark shipped with the distributed files is stripped automatically (otherwise the first column
+would be ``"\\ufeffid"`` and the ``id`` drop would miss it).
+
 ### If the two files are reversed
 
 It is easy to download `UNSW_NB15_training-set.csv` and `UNSW_NB15_testing-set.csv` and save them as

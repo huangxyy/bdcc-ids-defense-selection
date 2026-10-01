@@ -32,7 +32,12 @@ def resolve_device(spec: str = "auto") -> torch.device:
             return torch.device("mps")
         return torch.device("cpu")
 
-    device = torch.device(normalized)
+    try:
+        device = torch.device(normalized)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"unknown device {spec!r}; choose from auto, cpu, cuda, cuda:N or mps"
+        ) from exc
     if device.type == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError(

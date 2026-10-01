@@ -86,8 +86,9 @@ def main() -> int:
         print(f"  [FAIL] {tr_p} and/or {te_p} not found. Run 'python code/prepare_data.py' first.")
         return 2
     t = time.perf_counter()
-    train_df = pd.read_csv(tr_p)
-    test_df = pd.read_csv(te_p)
+    # utf-8-sig so a byte-order mark cannot rename the `id` column to "\ufeffid"
+    train_df = pd.read_csv(tr_p, encoding="utf-8-sig")
+    test_df = pd.read_csv(te_p, encoding="utf-8-sig")
     check("CSV load", "PASS",
           f"train {len(train_df):,} rows / test {len(test_df):,} rows  ({time.perf_counter()-t:.1f}s)")
     check("required columns present", "PASS" if set(REQUIRED_COLUMNS).issubset(train_df.columns) else "FAIL",

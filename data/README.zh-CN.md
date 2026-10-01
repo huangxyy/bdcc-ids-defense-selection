@@ -25,6 +25,9 @@ uv run python code/prepare_data.py
 
 该命令会统计每个文件的记录数并与官方划分大小比较，同时检查必需的列是否存在。
 
+校验脚本和训练代码都用 ``utf-8-sig`` 读取 CSV，因此官方文件自带的 BOM 会被自动去掉
+（否则第一列会变成 ``"\\ufeffid"``，导致 ``id`` 列没有被正确剔除）。
+
 ### 如果两个文件被弄反了
 
 很容易出现这样的情况：下载了 `UNSW_NB15_training-set.csv` 和 `UNSW_NB15_testing-set.csv`，

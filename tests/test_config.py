@@ -2,15 +2,28 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+from dataclasses import fields
 
 import pytest
 
 from ids_defense_selection.config import (
     DEFAULT_EVAL_SUBSET_SEED,
+    GROUP_CLASSES,
+    GROUP_ORDER,
+    AttackConfig,
+    EvaluationConfig,
     ExperimentConfig,
+    MethodsConfig,
+    PathsConfig,
+    RuntimeConfig,
+    SensitivityConfig,
+    TrainingConfig,
     build_parser,
     config_from_args,
+    emit_config,
+    field_group,
     field_help,
     parse_tuple_value,
 )
@@ -95,10 +108,28 @@ def test_evaluation_subset_and_full_test_defaults_are_configurable() -> None:
     assert overridden.full_test_attack_settings == (("fgsm", 0.05),)
 
 
+def test_adaptive_evaluation_defaults_and_validation() -> None:
+    config = ExperimentConfig(train_path="train.csv", test_path="test.csv")
+    assert config.adaptive_eval is False          # expensive: opt-in
+    assert config.adaptive_epsilon == 0.10
+    assert config.adaptive_steps == 40
+    assert config.adaptive_restarts == 5
+
+    parser = build_parser(require_paths=False)
+    args = parser.parse_args(["--adaptive-eval", "--adaptive-steps", "10"])
+    overridden = config_from_args(args)
+    assert overridden.adaptive_eval is True
+    assert overridden.adaptive_steps == 10
+
+    with pytest.raises(ValueError, match="adaptive_steps"):
+        ExperimentConfig(train_path="train.csv", test_path="test.csv", adaptive_steps=0)
+
+
 def test_every_field_has_help_text_and_a_flag() -> None:
     parser = build_parser(require_paths=False)
     for name in ExperimentConfig.__dataclass_fields__:
         assert field_help(name), f"{name} has no help text in its metadata"
+        assert field_group(name) in GROUP_ORDER, f"{name} has no config group"
     # every field except the two dataset paths is exposed as a config flag
     args = parser.parse_args([])
     for name in ExperimentConfig.__dataclass_fields__:
@@ -161,3 +192,71 @@ def test_config_from_args_reports_validation_errors_cleanly() -> None:
     with pytest.raises(SystemExit) as excinfo:
         config_from_args(args)
     assert "batch_size" in str(excinfo.value)
+
+
+def test_grouped_view_is_nested_and_covers_every_field() -> None:
+    config = ExperimentConfig(train_path="train.csv", test_path="test.csv")
+    grouped = config.grouped()
+    assert list(grouped) == list(GROUP_ORDER)
+
+    flat = set(ExperimentConfig.__dataclass_fields__)
+    seen = [name for group in grouped.values() for name in group]
+    assert sorted(seen) == sorted(flat)
+    assert len(seen) == len(set(seen)), "a field must belong to exactly one group"
+
+    assert config.training.batch_size == 1024
+    assert config.attack.adv_epsilon == 0.06
+    assert config.evaluation.epsilon_list == (0.02, 0.05, 0.10)
+    assert config.methods.trades_beta == 6.0
+    assert config.sensitivity.sensitivity_top_ratio == 0.3
+    assert config.paths.output_dir == "outputs/default"
+    assert config.runtime.device == "auto"
+
+
+def test_field_metadata_groups_match_group_classes() -> None:
+    for group_name, group_class in GROUP_CLASSES.items():
+        declared = {f.name for f in fields(group_class)}
+        tagged = {name for name in ExperimentConfig.__dataclass_fields__
+                  if field_group(name) == group_name}
+        assert declared == tagged, f"group {group_name!r} does not match its metadata"
+
+
+def test_group_dataclasses_validate_standalone() -> None:
+    assert PathsConfig(train_path="a", test_path="b", output_dir="c").problems() == []
+    assert RuntimeConfig(device="cpu").problems() == []
+    assert RuntimeConfig(device="cuda:1").problems() == []
+    assert any("device must be" in issue for issue in RuntimeConfig(device="quantum").problems())
+    assert TrainingConfig(batch_size=0).problems() == ["batch_size must be >= 1"]
+    assert "adv_steps must be >= 1" in AttackConfig(adv_steps=0).problems()
+    assert "seeds must contain at least one seed" in EvaluationConfig(seeds=()).problems()
+    assert any("extra_methods" in issue for issue in MethodsConfig(extra_methods=("nope",)).problems())
+    assert "sensitivity_top_ratio must be in (0, 1]" in SensitivityConfig(
+        sensitivity_top_ratio=0.0).problems()
+
+
+def test_problems_are_prefixed_with_their_group() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        ExperimentConfig(train_path="", test_path="test.csv", adv_steps=0)
+    text = str(excinfo.value)
+    assert "[paths] train_path" in text
+    assert "[attack] adv_steps" in text
+
+
+def test_print_config_emits_grouped_json(capsys: pytest.CaptureFixture) -> None:
+    parser = build_parser(require_paths=False)
+    config = config_from_args(parser.parse_args([]))
+    with pytest.raises(SystemExit):
+        emit_config(config)
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["training"]["batch_size"] == 1024
+    assert payload["runtime"]["device"] == "auto"
+    assert set(payload) == set(GROUP_ORDER)
+
+
+def test_default_dataset_paths_are_repo_root_based() -> None:
+    parser = build_parser(require_paths=False)
+    args = parser.parse_args([])
+    assert Path(args.train_path).is_absolute()
+    assert Path(args.test_path).is_absolute()
+    assert Path(args.train_path).name == "train.csv"
+    assert Path(args.test_path).name == "test.csv"

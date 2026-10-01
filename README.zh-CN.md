@@ -155,12 +155,18 @@ std_results.csv           同一批单元格的种子标准差
 raw_results.csv           每个种子一行
 significance_tests.csv    防御两两之间的配对 t 检验与 Wilcoxon 检验
 efficiency_mean.csv       参数量、训练耗时、推理延迟
+attack_generalization.csv 对训练从未见过的攻击族的鲁棒性
+hyperparameters.csv       全部配置字段（分组、取值、说明）
 run_summary.json          实际使用的完整配置
 risk_profile_4d.csv       四维画像与帕累托标记
 ```
 
 训练结束后对整个测试集施加的攻击同样可配置：`--full-test-attack-settings pgd:0.10`
 指定攻击方式与预算，`--full-test-attack-rows 0`（默认）表示攻击完整测试集。
+
+自适应攻击套件（重启 PGD、无梯度 NES、针对掩码防御的 complement attack）默认关闭（开销大），
+加上 `--adaptive-eval`（可选 `--adaptive-steps`、`--adaptive-restarts`、`--adaptive-epsilon`）后，
+运行会额外写出 `adaptive_attack_raw.csv` / `adaptive_attack_mean.csv`。
 
 ### 最差类别召回（phi4），五个随机种子
 
@@ -178,6 +184,16 @@ FT-Transformer 训练时使用 `--adv-steps 7`、评测时使用 `--eval-pgd-ste
 ```bash
 uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 ```
+
+决策步骤现在会考虑种子间的波动，并支持设置最低标准：
+
+```bash
+# 不确定性感知帕累托（均值 ± 1 倍标准差），并淘汰低于门槛的候选
+uv run python code/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
+```
+
+`risk_profile_4d.csv` 会带上各目标的标准差，以及"统计判定"和"点估计判定"两种帕累托标记；
+`outputs/decision_settings.json` 记录产生推荐所用的门槛与置信度余量。
 
 ### 预期运行时间
 
@@ -230,11 +246,17 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 ## 完整参数化
 
 **`ExperimentConfig` 的每个字段都是一个命令行参数。** 参数由 dataclass 自动生成，因此 CLI
-不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 47 个字段在三个
+不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 51 个字段在三个
 骨干脚本中完全一致。
 
 每个字段的帮助文本和旧参数别名都写在 dataclass 元数据里；配置在构造时就会做校验：像
 `--batch-size 0`、未知的攻击名或格式错误的元组，都会立即报出一条可读的错误，并一次性列出所有问题。
+
+为了方便维护和一眼看清实验设置，同样的字段还按域拆成七个不可变分组——`paths`、`training`、
+`attack`、`evaluation`、`methods`、`sensitivity`、`runtime`，每组自己校验自己的字段。
+`--print-config` 和 `run_summary.json` 都按这个结构输出；在 Python 里也可以用
+`config.training.batch_size`、`config.evaluation.epsilon_list`、`config.runtime.device` 访问，
+而代码里原有的扁平访问（`config.batch_size`）保持不变。
 
 ```bash
 uv run python code/run_cnn1d.py --help              # 查看完整参数列表与默认值

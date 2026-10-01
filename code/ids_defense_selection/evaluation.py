@@ -16,6 +16,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .attacks import compute_attack_validity_metrics, generate_adversarial_examples
+from .adaptive import evaluate_adaptive_suite
 from .config import ExperimentConfig
 from .data import make_dataloader, stratified_subset_indices
 from .defenses import TrainedDefenses
@@ -286,6 +287,7 @@ class EvaluationResults:
     categories: pd.DataFrame
     full_test_clean: pd.DataFrame
     full_test_attack: pd.DataFrame
+    adaptive: pd.DataFrame
 
 
 def evaluate_defenses(
@@ -310,6 +312,7 @@ def evaluate_defenses(
     efficiency_rows: list[dict] = []
     validity_rows: list[dict] = []
     category_rows: list[pd.DataFrame] = []
+    adaptive_rows: list[dict] = []
     full_clean_rows: list[dict] = []
     full_attack_rows: list[dict] = []
 
@@ -409,6 +412,21 @@ def evaluate_defenses(
                 **classification_metrics(full_y, attacked_probs, clean_pred=full_clean_pred),
             })
 
+        if config.adaptive_eval:
+            for row in evaluate_adaptive_suite(
+                {model_name: model},
+                eval_set.x_eval, eval_set.y_eval,
+                eval_set.attack_mask, eval_set.numeric_mins, eval_set.numeric_maxs,
+                trained.defense_masks(),
+                epsilon=config.adaptive_epsilon,
+                device=device,
+                batch_size=config.batch_size,
+                steps=config.adaptive_steps,
+                restarts=config.adaptive_restarts,
+                seed=config.eval_subset_seed,
+            ):
+                adaptive_rows.append({"seed": seed, **row})
+
     empty_full_attack = pd.DataFrame(columns=[
         "seed", "model", "subset", "attack", "epsilon", "test_rows",
         "accuracy", "precision", "recall", "f1", "auc", "attack_success_rate"])
@@ -420,4 +438,8 @@ def evaluate_defenses(
                     else pd.DataFrame()),
         full_test_clean=pd.DataFrame(full_clean_rows),
         full_test_attack=(pd.DataFrame(full_attack_rows) if full_attack_rows else empty_full_attack),
+        adaptive=(pd.DataFrame(adaptive_rows) if adaptive_rows else pd.DataFrame(
+            columns=["model", "epsilon", "asr_pgd_margin", "asr_pgd_ce", "asr_complement",
+                     "asr_nes_gradfree", "grad_l2_mean", "grad_linf_mean",
+                     "zero_gradient_fraction"])),
     )

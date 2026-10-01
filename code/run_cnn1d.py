@@ -31,6 +31,7 @@ from ids_defense_selection import (
     resolve_device,
     resolve_path,
     set_seed,
+    split_summary,
     stratified_subset_indices,
     train_all_defenses,
     write_backbone_outputs,
@@ -88,6 +89,7 @@ def main() -> None:
     validity: list[pd.DataFrame] = []
     full_test_clean: list[pd.DataFrame] = []
     full_test_attack: list[pd.DataFrame] = []
+    adaptive_frames: list[pd.DataFrame] = []
 
     for seed in config.seeds:
         set_seed(seed)
@@ -114,6 +116,8 @@ def main() -> None:
         validity.append(evaluation.validity)
         full_test_clean.append(evaluation.full_test_clean)
         full_test_attack.append(evaluation.full_test_attack)
+        if not evaluation.adaptive.empty:
+            adaptive_frames.append(evaluation.adaptive)
         print(f"[cnn1d][seed {seed}] completed", flush=True)
 
     frames = BackboneRunFrames(
@@ -123,10 +127,13 @@ def main() -> None:
         validity=pd.concat(validity, ignore_index=True),
         full_test_clean=pd.concat(full_test_clean, ignore_index=True),
         full_test_attack=pd.concat(full_test_attack, ignore_index=True),
+        adaptive=(pd.concat(adaptive_frames, ignore_index=True) if adaptive_frames
+                  else pd.DataFrame()),
     )
     summary = {
         "architecture": "1D-CNN (Conv1d(1,32,3) -> Conv1d(32,64,3) -> AvgPool -> FC(64,32) -> FC(32,1))",
         "resolved_device": str(device),
+        "dataset_split": split_summary(len(train_df), len(test_df)),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "eval_rows": int(len(eval_set.y_eval)),

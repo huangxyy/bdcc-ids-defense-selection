@@ -10,7 +10,6 @@ from __future__ import annotations
 import copy
 import json
 import math
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -46,7 +45,10 @@ from .reporting import (
     plot_ratio_ablation,
     plot_transfer_heatmap,
     summarize_results,
+    write_attack_generalization,
+    write_hyperparameter_table,
 )
+from .spec import split_summary
 
 def run_mlp_experiment(config: ExperimentConfig) -> None:
     """Train and evaluate every defense on the MLP backbone. Writes all outputs."""
@@ -83,6 +85,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
     validity_frames: list[pd.DataFrame] = []
     category_frames: list[pd.DataFrame] = []
     full_test_frames: list[pd.DataFrame] = []
+    adaptive_frames: list[pd.DataFrame] = []
     transfer_frames: list[pd.DataFrame] = []
     reference_clean_rows: list[dict] = []
     ratio_rows: list[dict] = []
@@ -119,6 +122,8 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
         validity_frames.append(evaluation.validity)
         category_frames.append(evaluation.categories)
         full_test_frames.append(evaluation.full_test_clean)
+        if not evaluation.adaptive.empty:
+            adaptive_frames.append(evaluation.adaptive)
 
         # --- non-neural reference models ----------------------------------
         reference_models, reference_train_seconds = fit_reference_models(
@@ -201,6 +206,7 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
         validity_frames=validity_frames,
         category_frames=category_frames,
         full_test_frames=full_test_frames,
+        adaptive_frames=adaptive_frames,
         transfer_frames=transfer_frames,
         reference_clean_rows=reference_clean_rows,
         ratio_rows=ratio_rows,
@@ -224,6 +230,7 @@ def _write_mlp_outputs(
     validity_frames: list[pd.DataFrame],
     category_frames: list[pd.DataFrame],
     full_test_frames: list[pd.DataFrame],
+    adaptive_frames: list[pd.DataFrame],
     transfer_frames: list[pd.DataFrame],
     reference_clean_rows: list[dict],
     ratio_rows: list[dict],
@@ -346,6 +353,16 @@ def _write_mlp_outputs(
     efficiency_df.to_csv(output_dir / "efficiency_raw.csv", index=False)
     efficiency_mean_df.to_csv(output_dir / "efficiency_mean.csv", index=False)
 
+    if adaptive_frames:
+        adaptive_df = pd.concat(adaptive_frames, ignore_index=True)
+        adaptive_df.to_csv(output_dir / "adaptive_attack_raw.csv", index=False)
+        adaptive_df.drop(columns=["seed"]).groupby(
+            ["model", "epsilon"], as_index=False
+        ).mean(numeric_only=True).to_csv(output_dir / "adaptive_attack_mean.csv", index=False)
+
+    write_hyperparameter_table(config, output_dir)
+    write_attack_generalization(mean_df, config, output_dir)
+
     plot_metric_curve(mean_df, "f1", output_dir / "f1_curve.png")
     plot_metric_curve(mean_df, "recall", output_dir / "recall_curve.png")
     plot_clean_f1_bar(mean_df, output_dir / "clean_f1_bar.png")
@@ -376,7 +393,8 @@ def _write_mlp_outputs(
     summary = {
         "architecture": f"MLP {config.hidden_dims}",
         "resolved_device": str(device),
-        "config": asdict(config),
+        "dataset_split": split_summary(len(train_df), len(test_df)),
+        "config": config.grouped(),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "eval_rows": int(len(y_test)),

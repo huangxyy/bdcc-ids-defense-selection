@@ -164,6 +164,8 @@ std_results.csv           same cells, standard deviation over seeds
 raw_results.csv           one row per seed
 significance_tests.csv    paired t-test and Wilcoxon between defenses
 efficiency_mean.csv       parameter count, training seconds, inference latency
+attack_generalization.csv robustness to attacks that were never used in training
+hyperparameters.csv       every ExperimentConfig field (group, value, help)
 run_summary.json          the complete configuration actually used
 risk_profile_4d.csv       the four-dimensional profile and the Pareto flag
 ```
@@ -171,6 +173,11 @@ risk_profile_4d.csv       the four-dimensional profile and the Pareto flag
 The attack applied to the test partition after training is configurable as well:
 `--full-test-attack-settings pgd:0.10` selects the attack and its budget, and
 `--full-test-attack-rows 0` (the default) attacks the complete partition.
+
+The adaptive attack suite (restart PGD, gradient-free NES and the complement attack against
+masked defenses) is opt-in because it is expensive: add `--adaptive-eval` (optionally
+`--adaptive-steps`, `--adaptive-restarts`, `--adaptive-epsilon`) and the run also writes
+`adaptive_attack_raw.csv` / `adaptive_attack_mean.csv`.
 
 ### Worst-class recall (phi4), five seeds
 
@@ -189,6 +196,17 @@ and evaluates with `--eval-pgd-steps 20`; the two budgets are recorded separatel
 ```bash
 uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 ```
+
+The decision step now accounts for run-to-run variation and can enforce minimum standards:
+
+```bash
+# uncertainty-aware Pareto (mean +/- 1 std), drop candidates below the thresholds
+uv run python code/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
+```
+
+`risk_profile_4d.csv` carries the per-objective standard deviations and both the
+uncertainty-aware and the point-estimate Pareto flags; `outputs/decision_settings.json`
+records the thresholds and margin that produced the recommendations.
 
 ### Expected runtime
 
@@ -243,13 +261,20 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 
 **Every field of `ExperimentConfig` is a command-line flag.** The flags are generated from the
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
-`ExperimentConfig` automatically adds a flag. All 47 fields are exposed identically by all three
+`ExperimentConfig` automatically adds a flag. All 51 fields are exposed identically by all three
 backbone scripts.
 
 Each field also carries its own help text and legacy flag aliases as dataclass metadata, and the
 values are validated as soon as the configuration is built: a typo such as `--batch-size 0`, an
 unknown attack name or a malformed tuple fails immediately with one readable message that lists
 every problem found.
+
+For maintenance and for reading an experiment at a glance, the same fields are exposed as seven
+immutable groups — `paths`, `training`, `attack`, `evaluation`, `methods`, `sensitivity` and
+`runtime` — and each group validates its own fields. `--print-config` and `run_summary.json` print
+the configuration in that structure, and the same views are available in Python
+(`config.training.batch_size`, `config.evaluation.epsilon_list`, `config.runtime.device`, ...)
+while the flat access used by the code (`config.batch_size`) keeps working unchanged.
 
 ```bash
 uv run python code/run_cnn1d.py --help              # the full list, with defaults
