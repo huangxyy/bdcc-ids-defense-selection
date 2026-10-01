@@ -127,14 +127,9 @@ def write_significance_tests(results_df: pd.DataFrame, epsilon_list: tuple[float
                 b = subset[subset["model"] == model_b].sort_values("seed")[metric].to_numpy()
                 if len(a) < 2 or len(a) != len(b):
                     continue
-                try:
-                    t_statistic, t_pvalue = scipy_stats.ttest_rel(a, b)
-                except Exception:
-                    t_statistic, t_pvalue = float("nan"), float("nan")
-                try:
-                    wilcoxon_statistic, wilcoxon_pvalue = scipy_stats.wilcoxon(a, b)
-                except Exception:
-                    wilcoxon_statistic, wilcoxon_pvalue = float("nan"), float("nan")
+                # shared helper: mutes scipy's degenerate-sample RuntimeWarning
+                t_statistic, t_pvalue = idsds.run_paired_test(scipy_stats.ttest_rel, a, b)
+                wilcoxon_statistic, wilcoxon_pvalue = idsds.run_paired_test(scipy_stats.wilcoxon, a, b)
                 sig_rows.append(
                     {
                         "comparison": f"{model_a}_vs_{model_b}",

@@ -123,6 +123,7 @@ _EXPORTS: dict[str, str] = {
     "plot_metric_curve": ".reporting",
     "plot_ratio_ablation": ".reporting",
     "plot_transfer_heatmap": ".reporting",
+    "run_paired_test": ".reporting",
     "summarize_results": ".reporting",
     "write_backbone_outputs": ".reporting",
 }
