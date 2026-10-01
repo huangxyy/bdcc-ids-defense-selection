@@ -36,6 +36,7 @@ _EXPORTS: dict[str, str] = {
     "add_config_arguments": ".config",
     "build_parser": ".config",
     "config_from_args": ".config",
+    "default_instance": ".config",
     "default_rows": ".config",
     "emit_config": ".config",
     "field_aliases": ".config",

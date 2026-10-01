@@ -25,10 +25,19 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from dataclasses import MISSING, asdict, dataclass, field, fields
+from pathlib import Path
 from typing import Any
 
-from .paths import DEFAULT_DATA_DIR
+# Allow `python code/ids_defense_selection/config.py`: a module executed by file
+# path has no parent package, so it cannot resolve the relative imports below.
+# Give it the package it belongs to before those imports run.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "ids_defense_selection"
+
+from .paths import DEFAULT_DATA_DIR  # noqa: E402 - needs the guard above
 
 # --------------------------------------------------------------------------- #
 # Shared defaults and vocabularies
@@ -788,5 +797,21 @@ def format_default_config() -> str:
     return "\n".join(lines)
 
 
+def default_instance() -> ExperimentConfig:
+    """A valid ``ExperimentConfig`` pointing at this repository's own dataset.
+
+    ``train_path`` / ``test_path`` have no dataclass default (the runners fill
+    them in), so a bare ``ExperimentConfig()`` raises; this helper is the
+    documented way to get a ready-to-inspect instance.
+    """
+    return ExperimentConfig(
+        train_path=str(DEFAULT_DATA_DIR / "train.csv"),
+        test_path=str(DEFAULT_DATA_DIR / "test.csv"),
+    )
+
+
 if __name__ == "__main__":
     print(format_default_config())
+    print()
+    print("Resolved defaults for this repository (same shape as --print-config):")
+    print(json.dumps(default_instance().grouped(), indent=2, default=str, ensure_ascii=False))
