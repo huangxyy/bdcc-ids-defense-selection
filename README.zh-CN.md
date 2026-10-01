@@ -50,6 +50,15 @@ uv run python run_experiments.py
 解释器由 `.python-version`（`3.12`）固定、依赖由 `uv.lock` 固定，所以一台新服务器只需要装
 uv，不需要 root，也不用自己配 CUDA 工具链：
 
+依赖下载默认走**清华 PyPI 镜像**（配置在 `pyproject.toml` 里），国内服务器不用再等 `pypi.org`；
+国外环境可用 `UV_DEFAULT_INDEX=https://pypi.org/simple uv sync` 切回官方源。两种服务器用法都有
+一键脚本：
+
+```bash
+bash code/setup_server.sh          # uv sync（走镜像，CPython 3.12 + 锁定依赖）
+bash code/setup_server.sh --pip    # 复用已有的 conda torch，只 pip 安装其余依赖
+```
+
 ```bash
 # 只需要执行一次，无需 root
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -133,6 +142,7 @@ bdcc-ids-defense-selection/
 │   ├── prepare_data.py                       # 校验 / 修复数据集目录
 │   ├── smoke_test.py                         # 快速端到端自检
 │   ├── check_devices.py                      # CPU / CUDA / MPS 可用性报告
+│   ├── setup_server.sh                       # 服务器一键安装（自动走国内镜像）
 │   ├── run_mlp.py                            # MLP 实验
 │   ├── run_cnn1d.py                          # 1D-CNN 实验
 │   ├── run_ft_transformer.py                 # FT-Transformer 实验

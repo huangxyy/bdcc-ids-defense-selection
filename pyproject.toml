@@ -35,6 +35,15 @@ dependencies = [
 [tool.uv]
 package = false
 
+# Default to the Tsinghua PyPI mirror: downloads are much faster on servers in
+# mainland China.  Outside China, override it with
+#   UV_DEFAULT_INDEX=https://pypi.org/simple uv sync
+# (or pass --default-index https://pypi.org/simple).
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

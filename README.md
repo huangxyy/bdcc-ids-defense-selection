@@ -55,6 +55,16 @@ Run `uv run python run_experiments.py --dry-run` to see the exact commands witho
 The interpreter is pinned by `.python-version` (`3.12`) and the dependencies by `uv.lock`, so a
 fresh server only needs uv — no root and no manual CUDA toolchain setup:
 
+Package downloads default to the **Tsinghua PyPI mirror** (configured in `pyproject.toml`), so a
+server in mainland China does not wait for `pypi.org`; outside China override it with
+`UV_DEFAULT_INDEX=https://pypi.org/simple uv sync`. Both server workflows have a one-command
+shortcut:
+
+```bash
+bash code/setup_server.sh          # uv sync (mirror-aware, CPython 3.12 + locked deps)
+bash code/setup_server.sh --pip    # reuse an existing conda torch: pip-install the other deps
+```
+
 ```bash
 # once, no root required
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -141,6 +151,7 @@ bdcc-ids-defense-selection/
 │   ├── prepare_data.py                       # validate / repair the dataset layout
 │   ├── smoke_test.py                         # fast end-to-end sanity check
 │   ├── check_devices.py                      # CPU / CUDA / MPS availability report
+│   ├── setup_server.sh                       # one-command server setup (mirror-aware)
 │   ├── run_mlp.py                            # MLP experiment
 │   ├── run_cnn1d.py                          # 1D-CNN experiment
 │   ├── run_ft_transformer.py                 # FT-Transformer experiment
