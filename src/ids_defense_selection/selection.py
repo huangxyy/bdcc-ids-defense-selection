@@ -2,8 +2,8 @@
 Pareto-Optimal Defense Selection Analysis
 ==========================================
 Computes 4-dimensional risk profiles (phi1..phi4) for each defense strategy
-across MLP and 1D-CNN backbones, finds the Pareto front, and generates
-publication-quality figures and summary CSV tables.
+across the MLP, 1D-CNN and FT-Transformer backbones, finds the Pareto front,
+and generates publication-quality figures and summary CSV tables.
 
 Usage:
     uv run python scripts/pareto_selection.py
@@ -39,6 +39,23 @@ BACKBONE_DIRS = {
     "CNN": BACKBONE_OUTPUT_SUBDIRS["cnn"],
     "FT-Trans": BACKBONE_OUTPUT_SUBDIRS["ft"],
     "CICIDS": "cicids2017_strict_matched_budget_run",
+}
+
+#: Decision-layer backbones: key -> display label.
+BACKBONE_LABELS = {
+    "MLP": "MLP",
+    "CNN": "1D-CNN",
+    "FT-Trans": "FT-Transformer",
+}
+
+#: Decision-layer backbone -> CLI key of ``scripts/run_experiments.py``.
+BACKBONE_CLI_KEYS = {"MLP": "mlp", "CNN": "cnn", "FT-Trans": "ft"}
+
+#: Decision-layer backbone -> column in ``pareto_selection_results.csv``.
+BACKBONE_SELECTION_COLUMNS = {
+    "MLP": "mlp_selected",
+    "CNN": "cnn_selected",
+    "FT-Trans": "ft_selected",
 }
 
 DEFENSE_ORDER = FS.DEFENSE_ORDER  # 6 defenses in canonical order
@@ -353,14 +370,15 @@ def _pareto_front_path(objectives_2d: np.ndarray,
     return pts[np.argsort(pts[:, 0])]
 
 
-def plot_pareto_front_comparison(obj_mlp: pd.DataFrame,
-                                 obj_cnn: pd.DataFrame,
+def plot_pareto_front_comparison(objectives: dict[str, pd.DataFrame],
                                  out_path: str) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(6.69, 3.0))
+    """One Pareto panel per backbone (MLP, 1D-CNN, FT-Transformer)."""
+    items = list(objectives.items())
+    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 3.0),
+                             squeeze=False)
 
-    for ax, obj, title in zip(axes,
-                               [obj_mlp, obj_cnn],
-                               ["(a) MLP Backbone", "(b) 1D-CNN Backbone"]):
+    for index, (ax, (key, obj)) in enumerate(zip(axes[0], items)):
+        title = f"({chr(ord('a') + index)}) {BACKBONE_LABELS.get(key, key)} Backbone"
         if obj.empty:
             ax.set_title(title)
             ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
@@ -452,16 +470,17 @@ def _risk_matrix(obj_phi1: pd.Series, mr: pd.DataFrame,
     return mat
 
 
-def plot_risk_surface_heatmap(data_mlp: dict, data_cnn: dict,
-                               out_path: str) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(6.69, 3.2))
+def plot_risk_surface_heatmap(data: dict[str, dict], out_path: str) -> None:
+    """One risk-surface panel per backbone."""
+    items = list(data.items())
+    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 3.2),
+                             squeeze=False)
     scenario_labels = [f"{a}\n$\\varepsilon$={e:.2f}"
                        for a, e in HEATMAP_SCENARIOS]
 
-    for ax, data, title in zip(axes,
-                                [data_mlp, data_cnn],
-                                ["(a) MLP", "(b) 1D-CNN"]):
-        mr = data.get("mean_results")
+    for index, (ax, (key, entry)) in enumerate(zip(axes[0], items)):
+        title = f"({chr(ord('a') + index)}) {BACKBONE_LABELS.get(key, key)}"
+        mr = entry.get("mean_results")
         if mr is None:
             ax.set_visible(False)
             continue
@@ -497,7 +516,7 @@ def plot_risk_surface_heatmap(data_mlp: dict, data_cnn: dict,
     print(f"  Saved: {out_path}")
 
 
-# ── Figure 3: Epsilon Pareto evolution (MLP only) ────────────────────────────
+# ── Figure 3: Epsilon Pareto evolution ───────────────────────────────────────
 
 EPSILON_LEVELS = list(DEFAULT_EPSILON_LIST)
 EPS_STYLES = {0.02: ("o", "solid",  0.9),
@@ -506,80 +525,78 @@ EPS_STYLES = {0.02: ("o", "solid",  0.9),
 DEFAULT_EPS_STYLE = ("o", "solid", 0.8)
 
 
-def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
-    mr  = data_mlp.get("mean_results")
-    eff = data_mlp.get("efficiency_mean")
-    if mr is None or eff is None:
-        print("  Skipping epsilon_pareto_evolution: MLP data unavailable.")
-        return
+def plot_epsilon_pareto_evolution(data: dict[str, dict], out_path: str) -> None:
+    """One epsilon-evolution panel per backbone."""
+    items = list(data.items())
+    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 2.8),
+                             squeeze=False)
 
-    phi1 = compute_phi1(mr)
-    phi3 = compute_phi3(eff)
-    models = [m for m in DEFENSE_ORDER if m in phi1.index and m in phi3.index]
-
-    fig, ax = plt.subplots(figsize=(3.35, 2.8))
-
-    legend_eps = []
-    for eps in EPSILON_LEVELS:
-        mk, ls, alp = EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)
-        phi2 = compute_phi2(mr, "pgd", eps)
-        if phi2.empty:
+    for index, (ax, (key, entry)) in enumerate(zip(axes[0], items)):
+        label = BACKBONE_LABELS.get(key, key)
+        mr = entry.get("mean_results")
+        eff = entry.get("efficiency_mean")
+        if mr is None or eff is None:
+            ax.set_visible(False)
             continue
 
-        pts  = np.array([[phi1[m], phi2[m]] for m in models
-                         if m in phi2.index])
-        mods = [m for m in models if m in phi2.index]
+        phi1 = compute_phi1(mr)
+        phi3 = compute_phi3(eff)
+        models = [m for m in DEFENSE_ORDER if m in phi1.index and m in phi3.index]
 
-        if len(pts) == 0:
-            continue
+        for eps in EPSILON_LEVELS:
+            mk, ls, alp = EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)
+            phi2 = compute_phi2(mr, "pgd", eps)
+            if phi2.empty:
+                continue
 
-        phi34 = np.array([[phi3[m], phi1[m]] for m in mods])
-        full_mat = np.hstack([pts, phi34])
-        pareto   = is_pareto_optimal(full_mat)
+            pts = np.array([[phi1[m], phi2[m]] for m in models
+                            if m in phi2.index])
+            mods = [m for m in models if m in phi2.index]
 
-        phi3v = np.array([phi3[m] for m in mods])
-        phi3_norm = (phi3v - phi3v.min()) / (phi3v.max() - phi3v.min() + 1e-10)
-        sizes = 25 + phi3_norm * 80
+            if len(pts) == 0:
+                continue
 
-        for idx, m in enumerate(mods):
-            col = FS.get_color(m)
-            edge = "black" if pareto[idx] else "0.7"
-            lw   = 0.8 if pareto[idx] else 0.4
-            ax.scatter(pts[idx, 0], pts[idx, 1],
-                       s=sizes[idx], marker=mk, color=col,
-                       edgecolors=edge, linewidths=lw,
-                       alpha=alp, zorder=3 + int(pareto[idx]))
+            phi34 = np.array([[phi3[m], phi1[m]] for m in mods])
+            full_mat = np.hstack([pts, phi34])
+            pareto = is_pareto_optimal(full_mat)
 
-        # Pareto frontier line for this epsilon
-        front = _pareto_front_path(pts, pareto)
-        if front is not None and len(front) > 1:
-            ax.plot(front[:, 0], front[:, 1], linestyle=ls,
-                    color="0.4", linewidth=0.7, alpha=0.8)
+            phi3v = np.array([phi3[m] for m in mods])
+            phi3_norm = (phi3v - phi3v.min()) / (phi3v.max() - phi3v.min() + 1e-10)
+            sizes = 25 + phi3_norm * 80
 
-        legend_eps.append(mpatches.Patch(
-            color="0.5", linestyle=ls, fill=False,
-            label=f"$\\varepsilon$={eps:.2f}"))
+            for idx, m in enumerate(mods):
+                col = FS.get_color(m)
+                edge = "black" if pareto[idx] else "0.7"
+                lw = 0.8 if pareto[idx] else 0.4
+                ax.scatter(pts[idx, 0], pts[idx, 1],
+                           s=sizes[idx], marker=mk, color=col,
+                           edgecolors=edge, linewidths=lw,
+                           alpha=alp, zorder=3 + int(pareto[idx]))
 
-    ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8)
-    ax.set_ylabel(r"$\phi_2$ Adversarial Resilience", fontsize=8)
-    ax.set_title("Pareto Front Evolution (MLP, PGD)", fontsize=9, pad=4)
+            front = _pareto_front_path(pts, pareto)
+            if front is not None and len(front) > 1:
+                ax.plot(front[:, 0], front[:, 1], linestyle=ls,
+                        color="0.4", linewidth=0.7, alpha=0.8)
 
-    # Defense color legend
-    def_handles = [mpatches.Patch(color=FS.get_color(m), label=FS.get_label(m))
-                   for m in models]
-    leg1 = ax.legend(handles=def_handles, fontsize=6,
-                     loc="lower left", handlelength=1.0)
-    ax.add_artist(leg1)
-    # Epsilon style legend using Line2D proxies
-    from matplotlib.lines import Line2D
-    eps_handles = [
-        Line2D([0], [0], marker=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[0], color="0.4",
-               linestyle=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[1], linewidth=0.8,
-               markersize=5, label=f"$\\varepsilon$={eps:.2f}")
-        for eps in EPSILON_LEVELS
-    ]
-    ax.legend(handles=eps_handles, fontsize=6,
-              loc="lower right", handlelength=1.5)
+        ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8)
+        ax.set_ylabel(r"$\phi_2$ Adversarial Resilience", fontsize=8)
+        ax.set_title(f"({chr(ord('a') + index)}) {label}, PGD", fontsize=9, pad=4)
+
+        if models:
+            def_handles = [mpatches.Patch(color=FS.get_color(m), label=FS.get_label(m))
+                           for m in models]
+            leg1 = ax.legend(handles=def_handles, fontsize=6,
+                             loc="lower left", handlelength=1.0)
+            ax.add_artist(leg1)
+            from matplotlib.lines import Line2D
+            eps_handles = [
+                Line2D([0], [0], marker=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[0],
+                       color="0.4", linestyle=EPS_STYLES.get(eps, DEFAULT_EPS_STYLE)[1],
+                       linewidth=0.8, markersize=5, label=f"$\\varepsilon$={eps:.2f}")
+                for eps in EPSILON_LEVELS
+            ]
+            ax.legend(handles=eps_handles, fontsize=6,
+                      loc="lower right", handlelength=1.5)
 
     plt.tight_layout(pad=0.6)
     fig.savefig(out_path)
@@ -589,16 +606,17 @@ def plot_epsilon_pareto_evolution(data_mlp: dict, out_path: str) -> None:
 
 # ── Figure 4: Theta sensitivity ──────────────────────────────────────────────
 
-def plot_theta_sensitivity(obj_mlp: pd.DataFrame, obj_cnn: pd.DataFrame,
-                           out_path: str) -> None:
+def plot_theta_sensitivity(objectives: dict[str, pd.DataFrame], out_path: str) -> None:
+    """One preference-sensitivity panel per backbone."""
     theta_names  = list(THETA_PRESETS.keys())
     theta_vals   = list(THETA_PRESETS.values())
 
-    fig, axes = plt.subplots(1, 2, figsize=(6.69, 2.8))
+    items = list(objectives.items())
+    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 2.8),
+                             squeeze=False)
 
-    for ax, obj, title in zip(axes,
-                               [obj_mlp, obj_cnn],
-                               ["(a) MLP Backbone", "(b) 1D-CNN Backbone"]):
+    for index, (ax, (key, obj)) in enumerate(zip(axes[0], items)):
+        title = f"({chr(ord('a') + index)}) {BACKBONE_LABELS.get(key, key)} Backbone"
         if obj.empty:
             ax.set_title(title)
             ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
@@ -676,25 +694,20 @@ def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
     print(f"  Saved: {out_path}")
 
 
-def write_selection_csv(obj_mlp: pd.DataFrame, obj_cnn: pd.DataFrame,
-                         out_path: str) -> None:
+def write_selection_csv(objectives: dict[str, pd.DataFrame], out_path: str) -> None:
+    """Write the preference-preset selection for every available backbone."""
     rows = []
     for name, theta in THETA_PRESETS.items():
-        mlp_sel = cnn_sel = "N/A"
-        if not obj_mlp.empty:
-            models_m = obj_mlp.index.tolist()
-            mat_m    = obj_mlp[["phi1", "phi2", "phi3", "phi4"]].values
-            mlp_sel  = FS.get_label(select_defense(mat_m, models_m, theta))
-        if not obj_cnn.empty:
-            models_c = obj_cnn.index.tolist()
-            mat_c    = obj_cnn[["phi1", "phi2", "phi3", "phi4"]].values
-            cnn_sel  = FS.get_label(select_defense(mat_c, models_c, theta))
-        rows.append({
-            "theta_name":   name,
-            "theta_values": str(theta),
-            "mlp_selected": mlp_sel,
-            "cnn_selected": cnn_sel,
-        })
+        row: dict[str, str] = {"theta_name": name, "theta_values": str(theta)}
+        for key in BACKBONE_LABELS:
+            objective = objectives.get(key, pd.DataFrame())
+            selected = "N/A"
+            if not objective.empty:
+                models = objective.index.tolist()
+                matrix = objective[["phi1", "phi2", "phi3", "phi4"]].values
+                selected = FS.get_label(select_defense(matrix, models, theta))
+            row[BACKBONE_SELECTION_COLUMNS[key]] = selected
+        rows.append(row)
     pd.DataFrame(rows).to_csv(out_path, index=False)
     print(f"  Saved: {out_path}")
 
@@ -787,21 +800,21 @@ def main() -> int:
 
     # ── Load data ──
     print(f"\nLoading data  (ref: {ref_atk}, eps={ref_eps:.2f})")
-    data = {k: load_backbone_data(k, dirs) for k in ("MLP", "CNN", "CICIDS")}
-    missing = [k for k in ("MLP", "CNN") if not data[k]]
-    if missing:
-        for key in missing:
-            print(f"  [missing] {dirs[key]}/mean_results.csv -- "
-                  f"run 'uv run python scripts/run_experiments.py --backbones {key.lower()}' first")
-        if len(missing) == len(("MLP", "CNN")):
-            print("\nNo backbone results found; nothing to analyse.")
-            return 1
+    data = {key: load_backbone_data(key, dirs) for key in BACKBONE_LABELS}
+    missing = [key for key in BACKBONE_LABELS if not data[key]]
+    for key in missing:
+        print(f"  [missing] {dirs[key]}/mean_results.csv -- run "
+              f"'uv run python scripts/run_experiments.py "
+              f"--backbones {BACKBONE_CLI_KEYS[key]}' first")
+    if not any(data.values()):
+        print("\nNo backbone results found; nothing to analyse.")
+        return 1
 
     # ── Build objective matrices (means + per-seed dispersion) ──
     print(f"\nDecision settings: margin={args.confidence_margin:g}·std, "
           f"min_phi2={args.min_phi2:g}, min_phi4={args.min_phi4:g}")
     prepared: dict[str, dict] = {}
-    for key, label in (("MLP", "MLP"), ("CNN", "1D-CNN")):
+    for key, label in BACKBONE_LABELS.items():
         means, stds = build_objective_matrices(data[key], ref_atk, ref_eps)
         entry = {"means": means, "stds": stds, "admissible": pd.Series(dtype=bool),
                  "dropped": [], "pareto_uncertain": [], "pareto_deterministic": []}
@@ -848,7 +861,7 @@ def main() -> int:
         prepared[key] = entry
 
     # ── Stdout summaries ──
-    for key, label in (("MLP", "MLP"), ("CNN", "1D-CNN")):
+    for key, label in BACKBONE_LABELS.items():
         entry = prepared[key]
         if entry["means"].empty:
             print_summary(label, entry["means"])
@@ -865,7 +878,8 @@ def main() -> int:
 
     # ── CSV outputs ──
     print("\nWriting CSV tables...")
-    for key, base_dir in (("MLP", dirs["MLP"]), ("CNN", dirs["CNN"])):
+    for key in BACKBONE_LABELS:
+        base_dir = dirs[key]
         entry = prepared[key]
         if entry["means"].empty:
             continue
@@ -876,12 +890,16 @@ def main() -> int:
             pareto_deterministic=entry.get("mask_deterministic"),
             admissible=entry["admissible"])
 
-    obj_mlp = prepared["MLP"].get("kept", prepared["MLP"]["means"].iloc[0:0])
-    obj_cnn = prepared["CNN"].get("kept", prepared["CNN"]["means"].iloc[0:0])
-    target_dir = dirs["MLP"] if not prepared["MLP"]["means"].empty else dirs["CNN"]
+    objectives = {
+        key: prepared[key].get("kept", prepared[key]["means"].iloc[0:0])
+        for key in BACKBONE_LABELS
+    }
+    target_dir = next(
+        (dirs[key] for key in BACKBONE_LABELS if not prepared[key]["means"].empty),
+        dirs["MLP"],
+    )
     os.makedirs(target_dir, exist_ok=True)
-    write_selection_csv(obj_mlp, obj_cnn,
-                        os.path.join(target_dir, "pareto_selection_results.csv"))
+    write_selection_csv(objectives, os.path.join(target_dir, "pareto_selection_results.csv"))
 
     settings = {
         "reference_attack": ref_atk,
@@ -898,7 +916,7 @@ def main() -> int:
                 "dispersion_available": bool(
                     not prepared[key]["stds"].empty and prepared[key]["stds"].to_numpy().sum() > 0),
             }
-            for key in ("MLP", "CNN")
+            for key in BACKBONE_LABELS
         },
     }
     settings_path = os.path.join(outputs_root, "decision_settings.json")
@@ -912,22 +930,16 @@ def main() -> int:
 
     # ── Figures ──
     print("\nGenerating figures...")
+    backbone_data = {key: data[key] for key in BACKBONE_LABELS}
 
     plot_pareto_front_comparison(
-        obj_mlp, obj_cnn,
-        os.path.join(fig_dir, "pareto_front_comparison.png"))
-
+        objectives, os.path.join(fig_dir, "pareto_front_comparison.png"))
     plot_risk_surface_heatmap(
-        data["MLP"], data["CNN"],
-        os.path.join(fig_dir, "risk_surface_heatmap.png"))
-
+        backbone_data, os.path.join(fig_dir, "risk_surface_heatmap.png"))
     plot_epsilon_pareto_evolution(
-        data["MLP"],
-        os.path.join(fig_dir, "epsilon_pareto_evolution.png"))
-
+        backbone_data, os.path.join(fig_dir, "epsilon_pareto_evolution.png"))
     plot_theta_sensitivity(
-        obj_mlp, obj_cnn,
-        os.path.join(fig_dir, "theta_sensitivity.png"))
+        objectives, os.path.join(fig_dir, "theta_sensitivity.png"))
 
     print("\nDone.")
     return 0

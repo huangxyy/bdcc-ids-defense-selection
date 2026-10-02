@@ -67,4 +67,4 @@ uv run python scripts/verify.py --quick
 | matplotlib 提示 cache 目录不可写 | 无害;可设置 `MPLCONFIGDIR=/tmp/matplotlib` |
 | `check_outputs` 报缺少文件 | 先跑对应主实验;`--quick` 的验证不产生产物 |
 | 划分方向告警 | `uv run python scripts/prepare_data.py --fix-swap`,然后重跑全部实验 |
-| FT-Transformer 缺少决策产物 | `selection.py` 目前只输出 MLP/CNN 的风险画像;把 FT 接入决策层后 `--require-analysis` 才会全绿 |
+| FT-Transformer 缺少决策产物 | 确认 `outputs/ft_transformer/` 已由 `run_ft_transformer.py` 生成;缺失的骨干会被决策脚本跳过,`--require-analysis` 会报出缺哪个文件 |

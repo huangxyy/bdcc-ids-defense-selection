@@ -9,6 +9,11 @@ import pytest
 
 from ids_defense_selection.paths import PROJECT_ROOT
 from ids_defense_selection.selection import (
+    BACKBONE_CLI_KEYS,
+    BACKBONE_DIRS,
+    BACKBONE_LABELS,
+    BACKBONE_SELECTION_COLUMNS,
+    THETA_PRESETS,
     apply_admissibility,
     build_objective_matrices,
     build_objective_matrix,
@@ -16,6 +21,7 @@ from ids_defense_selection.selection import (
     is_pareto_optimal_uncertain,
     resolve_outputs_root,
     select_defense,
+    write_selection_csv,
 )
 
 
@@ -172,3 +178,36 @@ def test_outputs_root_is_resolved_against_the_repo_root(
 
     absolute = tmp_path / "somewhere"
     assert resolve_outputs_root(str(absolute)) == absolute
+
+
+def test_backbone_constants_cover_the_decision_layer() -> None:
+    """FT-Transformer must be part of the decision layer, CIC-IDS2017 must not."""
+    assert set(BACKBONE_LABELS) == {"MLP", "CNN", "FT-Trans"}
+    assert set(BACKBONE_LABELS) == set(BACKBONE_DIRS) - {"CICIDS"}
+    assert set(BACKBONE_CLI_KEYS) == set(BACKBONE_LABELS)
+    assert set(BACKBONE_SELECTION_COLUMNS) == set(BACKBONE_LABELS)
+    assert set(BACKBONE_CLI_KEYS.values()) == {"mlp", "cnn", "ft"}
+
+
+def test_selection_csv_has_one_column_per_backbone(tmp_path: Path) -> None:
+    """The selection table must cover MLP, 1D-CNN and FT-Transformer."""
+    objectives = {
+        key: pd.DataFrame(
+            [[0.90 - 0.01 * index, 0.80 - 0.02 * index, 0.50, 0.40 + 0.05 * index]
+             for index in range(3)],
+            index=["standard", "trades", "free_at"],
+            columns=["phi1", "phi2", "phi3", "phi4"],
+        )
+        for key in BACKBONE_LABELS
+    }
+    path = tmp_path / "pareto_selection_results.csv"
+    write_selection_csv(objectives, str(path))
+
+    frame = pd.read_csv(path)
+    assert len(frame) == len(THETA_PRESETS)
+    assert set(frame.columns) == {
+        "theta_name", "theta_values",
+        "mlp_selected", "cnn_selected", "ft_selected",
+    }
+    for column in ("mlp_selected", "cnn_selected", "ft_selected"):
+        assert not (frame[column] == "N/A").any()
