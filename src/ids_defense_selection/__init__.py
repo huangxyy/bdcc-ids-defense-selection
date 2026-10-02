@@ -26,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         adaptive as adaptive,
         attacks as attacks,
         backbones as backbones,
+        checkpoints as checkpoints,
         config as config,
         data as data,
         defenses as defenses,
@@ -162,6 +163,11 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         prepare_attack_categories as prepare_attack_categories,
         run_mlp_experiment as run_mlp_experiment,
     )
+    from .checkpoints import (
+        load_checkpoint as load_checkpoint,
+        rebuild_trained_defenses as rebuild_trained_defenses,
+        save_checkpoint as save_checkpoint,
+    )
     from .reporting import (
         BackboneRunFrames as BackboneRunFrames,
         compute_significance_tests as compute_significance_tests,
@@ -235,6 +241,10 @@ _EXPORTS: dict[str, str] = {
     "MLPBackbone": ".backbones",
     "build_ft_transformer": ".backbones",
     "ft_transformer_kwargs": ".backbones",
+    # checkpoints
+    "load_checkpoint": ".checkpoints",
+    "rebuild_trained_defenses": ".checkpoints",
+    "save_checkpoint": ".checkpoints",
     # data
     "build_features": ".data",
     "load_unsw_nb15": ".data",
@@ -300,6 +310,7 @@ _SUBMODULES: tuple[str, ...] = (
     "adaptive",
     "attacks",
     "backbones",
+    "checkpoints",
     "config",
     "data",
     "defenses",

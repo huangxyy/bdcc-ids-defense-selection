@@ -72,6 +72,19 @@ def test_main_covers_every_backbone(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     for subdir in BACKBONE_DIRS:
         assert (tmp_path / subdir / "risk_profile_4d.csv").is_file()
+        comparison = pd.read_csv(tmp_path / subdir / "decision_comparators.csv")
+        assert {"pareto_weighted", "weighted_no_pareto", "weighted_fixed01",
+                "topsis_no_pareto", "topsis_pareto"} <= set(comparison.columns)
+        dependence = pd.read_csv(tmp_path / subdir / "candidate_dependence.csv")
+        assert {"theta_name", "removed", "selection", "selection_without",
+                "changed"} <= set(dependence.columns)
+        assert (tmp_path / subdir / "theta_sweep.csv").is_file()
+        summary = pd.read_csv(tmp_path / subdir / "theta_summary.csv")
+        assert {"defense", "n_regions", "share"} <= set(summary.columns)
+        assert (tmp_path / subdir / "switching_regions.json").is_file()
+        admissibility = pd.read_csv(tmp_path / subdir / "admissibility_sweep.csv")
+        assert {"tau2", "tau4", "n_admissible", "pareto_size",
+                "no_candidate"} <= set(admissibility.columns)
     settings = json.loads((tmp_path / "decision_settings.json").read_text(encoding="utf-8"))
     assert set(settings["backbones"]) == {"MLP", "CNN", "FT-Trans"}
     selection = pd.read_csv(tmp_path / "mlp" / "pareto_selection_results.csv")

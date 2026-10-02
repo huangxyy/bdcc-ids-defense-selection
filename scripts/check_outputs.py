@@ -56,6 +56,7 @@ REQUIRED_COLUMNS = {
 }
 
 def check_backbone(label: str, directory: Path, require_analysis: bool,
+                   require_checkpoints: bool,
                    errors: list[str], warnings: list[str]) -> None:
     """Append every problem found in one backbone directory."""
     if not directory.is_dir():
@@ -106,16 +107,38 @@ def check_backbone(label: str, directory: Path, require_analysis: bool,
                         "(unseen-attack evidence missing)")
 
     if require_analysis:
-        for name in ("risk_profile_4d.csv",):
+        analysis_files = {
+            "risk_profile_4d.csv": {"phi1_clean_f1", "phi2_resilience",
+                                    "phi3_cost_eff", "phi4_fairness"},
+            "decision_comparators.csv": {"theta_name", "pareto_weighted",
+                                         "weighted_no_pareto", "weighted_fixed01",
+                                         "topsis_no_pareto", "topsis_pareto"},
+            "candidate_dependence.csv": {"theta_name", "removed", "selection",
+                                         "selection_without", "changed"},
+            "theta_sweep.csv": {"theta1", "theta2", "theta3", "theta4", "selected"},
+            "theta_summary.csv": {"defense", "n_regions", "share"},
+            "admissibility_sweep.csv": {"tau2", "tau4", "n_admissible",
+                                        "pareto_size", "no_candidate"},
+        }
+        for name, columns in analysis_files.items():
             path = directory / name
             if not path.is_file():
                 errors.append(f"{label}: missing analysis artefact {name}")
                 continue
-            columns = {"phi1_clean_f1", "phi2_resilience",
-                       "phi3_cost_eff", "phi4_fairness"}
             missing = columns - set(pd.read_csv(path).columns)
             if missing:
                 errors.append(f"{label}: {name} is missing columns {sorted(missing)}")
+        if not (directory / "switching_regions.json").is_file():
+            errors.append(f"{label}: missing analysis artefact switching_regions.json")
+
+    if require_checkpoints:
+        bundles = sorted((directory / "checkpoints").glob("seed*/trained_defenses.pt"))
+        if not bundles:
+            errors.append(f"{label}: --require-checkpoints was set but no "
+                          "checkpoints/seed*/trained_defenses.pt exists")
+        for bundle in bundles:
+            if not (bundle.parent / "metadata.json").is_file():
+                errors.append(f"{label}: {bundle.parent.name} has no metadata.json")
 
 
 def main() -> int:
@@ -127,6 +150,8 @@ def main() -> int:
                         help="comma-separated subset of: mlp, cnn1d, ft")
     parser.add_argument("--require-analysis", action="store_true",
                         help="also require the Pareto/decision artefacts")
+    parser.add_argument("--require-checkpoints", action="store_true",
+                        help="require at least one saved checkpoint bundle per backbone")
     args = parser.parse_args()
 
     root = Path(args.root).expanduser().resolve()
@@ -142,7 +167,8 @@ def main() -> int:
     for key in keys:
         label = BACKBONE_DIRS[key]
         before = len(errors)
-        check_backbone(label, root / label, args.require_analysis, errors, warnings)
+        check_backbone(label, root / label, args.require_analysis,
+                       args.require_checkpoints, errors, warnings)
         print(f"  [{'ok' if len(errors) == before else 'FAIL'}] {label}")
 
     if args.require_analysis:

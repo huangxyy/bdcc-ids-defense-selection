@@ -26,6 +26,8 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 | `category_raw_results.csv` / `category_mean_results.csv` | per-attack-category recall (phi4 input) |
 | `hyperparameters.csv` | every configuration field, grouped, with help text |
 | `run_summary.json` | config, resolved device and dataset-split evidence |
+| `checkpoints/seed<seed>/trained_defenses.pt` | all six defenses + baseline (with `--save-checkpoints`) |
+| `checkpoints/seed<seed>/metadata.json` | backbone, seed, defense list, dataset split |
 
 ## Analysis directories
 
@@ -33,6 +35,12 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 |---|---|---|
 | `outputs/figures/` | `scripts/pareto_selection.py` | Pareto front, risk surface, epsilon evolution, theta sensitivity |
 | `outputs/<backbone>/risk_profile_4d.csv` | `scripts/pareto_selection.py` | phi1–phi4, per-objective std, Pareto and admissibility verdicts |
+| `outputs/<backbone>/decision_comparators.csv` | `scripts/pareto_selection.py` | Pareto+weighted vs weighted-only vs TOPSIS, plus the fixed-[0,1] normalisation variant |
+| `outputs/<backbone>/candidate_dependence.csv` | `scripts/pareto_selection.py` | leave-one-out test of the Eq. 7 candidate-set dependence |
+| `outputs/<backbone>/theta_sweep.csv` | `scripts/pareto_selection.py` | recommendation for every preference vector on the simplex (step `--theta-step`) |
+| `outputs/<backbone>/theta_summary.csv` | `scripts/pareto_selection.py` | share of the preference simplex each defense owns |
+| `outputs/<backbone>/switching_regions.json` | `scripts/pareto_selection.py` | exact pairwise preference hyperplanes between selected defenses |
+| `outputs/<backbone>/admissibility_sweep.csv` | `scripts/pareto_selection.py` | recommendation response over the tau2 x tau4 threshold grid (`--admissibility-step`) |
 | `outputs/decision_settings.json` | `scripts/pareto_selection.py` | confidence margin, admissibility thresholds, per-backbone verdicts |
 | `outputs/phi4_cnn/`, `outputs/phi4_ft/` | `scripts/evaluate_phi4_*.py` | multi-seed worst-class-recall evaluation |
 | `outputs/extended_analysis/` | `scripts/analyze_extended.py` | epsilon sweep, ROC, gradient-masking check |
@@ -41,3 +49,19 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 The authoritative description of the experiment protocol is `README.md`
 (`README.zh-CN.md`); `docs/verification.md` maps each manuscript table/figure
 to the command that regenerates it.
+
+## Traceability
+
+After a run passes `check_outputs.py`, write a markdown record so the numbers,
+the exact command and the interpretation stay together:
+
+```bash
+uv run python scripts/log_experiment.py \
+  --outputs-dir outputs/ft_transformer \
+  --record-dir records --title "FT main run" --status done \
+  --command "uv run python scripts/run_ft_transformer.py --device cuda ..."
+```
+
+The logger reads `run_summary.json`, `raw/mean/std_results.csv` and
+`efficiency_mean.csv`, so the record never contains hand-copied numbers; it
+creates `INDEX.md` next to the records and never overwrites an existing file.

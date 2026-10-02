@@ -18,6 +18,7 @@ import torch
 
 from .attacks import pgd_attack
 from .backbones import MLPBackbone
+from .checkpoints import save_checkpoint
 from .config import ExperimentConfig
 from .data import (
     build_features,
@@ -102,6 +103,12 @@ def run_mlp_experiment(config: ExperimentConfig) -> None:
             metadata=metadata,
             seed=seed,
         )
+        if config.save_checkpoints:
+            checkpoint_dir = save_checkpoint(
+                output_dir, trained, config, seed=seed, backbone="mlp",
+                input_dim=x_train.shape[1],
+                dataset_split=split_summary(len(train_df), len(test_df)))
+            print(f"[mlp][seed {seed}] checkpoint saved: {checkpoint_dir}", flush=True)
         sensitivity_tables.append(trained.sensitivity_table)
         print(f"[mlp][seed {seed}] evaluation started", flush=True)
 

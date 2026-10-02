@@ -26,7 +26,12 @@ import pandas as pd
 
 from . import style as FS
 from .config import DEFAULT_EPSILON_LIST
-from .paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT, resolve_path
+from .paths import (
+    BACKBONE_OUTPUT_SUBDIRS,
+    DEFAULT_OUTPUT_ROOT,
+    PHI4_OUTPUT_SUBDIRS,
+    resolve_path,
+)
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -58,7 +63,13 @@ BACKBONE_SELECTION_COLUMNS = {
     "FT-Trans": "ft_selected",
 }
 
+#: Decision-layer backbone -> PHI4_OUTPUT_SUBDIRS key of its dedicated phi4 run.
+PHI4_RUN_KEYS = {"CNN": "cnn", "FT-Trans": "ft"}
+
 DEFENSE_ORDER = FS.DEFENSE_ORDER  # 6 defenses in canonical order
+
+#: Objective columns in their canonical order.
+OBJECTIVE_COLUMNS = ["phi1", "phi2", "phi3", "phi4"]
 
 
 def resolve_outputs_root(value: str | Path) -> Path:
@@ -72,18 +83,26 @@ def resolve_outputs_root(value: str | Path) -> Path:
     """
     return resolve_path(value)
 
-# Theta presets: (w1_clean, w2_resilience, w3_cost, w4_fairness)
+#: Canonical preference presets from the manuscript (Table 2):
+#: (w1_clean, w2_resilience, w3_cost, w4_worst_class_recall).
 THETA_PRESETS = {
     "Robust":   (0.10, 0.60, 0.10, 0.20),
     "Balanced": (0.25, 0.35, 0.20, 0.20),
     "Clean":    (0.50, 0.15, 0.15, 0.20),
-    # Intermediate sweeps
-    "w_rob0.7": (0.10, 0.70, 0.10, 0.10),
-    "w_bal2":   (0.30, 0.30, 0.20, 0.20),
-    "w_cln2":   (0.60, 0.10, 0.15, 0.15),
-    "w_fair":   (0.20, 0.30, 0.10, 0.40),
-    "w_cost":   (0.20, 0.30, 0.40, 0.10),
+    "Cost":     (0.20, 0.20, 0.50, 0.10),
 }
+
+#: Additional illustrative presets used by the figures and the selection CSV.
+#: They are sensitivity points, not part of the manuscript table.
+EXTRA_THETA_PRESETS = {
+    "extra_robust":   (0.10, 0.70, 0.10, 0.10),
+    "extra_balanced": (0.30, 0.30, 0.20, 0.20),
+    "extra_clean":    (0.60, 0.10, 0.15, 0.15),
+    "extra_fair":     (0.20, 0.30, 0.10, 0.40),
+}
+
+#: Everything the selection CSV and the theta figure iterate over.
+ALL_THETA_PRESETS = {**THETA_PRESETS, **EXTRA_THETA_PRESETS}
 
 # ── Data loading helpers ─────────────────────────────────────────────────────
 
@@ -94,7 +113,14 @@ def _load_csv_safe(path: str) -> pd.DataFrame | None:
 
 
 def load_backbone_data(backbone: str, dirs: dict[str, str]) -> dict:
-    """Load all relevant CSVs for a given backbone key."""
+    """Load all relevant CSVs for a backbone, including the phi4 fallback.
+
+    MLP and FT-Transformer write the category CSVs inside their own run
+    directory, while the 1D-CNN delegates phi4 to ``scripts/evaluate_phi4_cnn.py``,
+    which writes to ``outputs/phi4_cnn/``.  The decision layer therefore falls
+    back to the dedicated phi4 directory when the backbone directory has no
+    category files, and records where φ4 came from.
+    """
     d = dirs.get(backbone)
     if d is None or not os.path.isdir(d):
         return {}
@@ -104,6 +130,18 @@ def load_backbone_data(backbone: str, dirs: dict[str, str]) -> dict:
         df = _load_csv_safe(os.path.join(d, f"{name}.csv"))
         if df is not None:
             data[name] = df
+    data["phi4_source"] = (
+        "backbone" if "category_raw_results" in data else "missing"
+    )
+    phi4_key = PHI4_RUN_KEYS.get(backbone)
+    if data["phi4_source"] == "missing" and phi4_key is not None:
+        phi4_dir = os.path.join(os.path.dirname(d), PHI4_OUTPUT_SUBDIRS[phi4_key])
+        for name in ("category_mean_results", "category_raw_results"):
+            df = _load_csv_safe(os.path.join(phi4_dir, f"{name}.csv"))
+            if df is not None:
+                data[name] = df
+        if "category_raw_results" in data:
+            data["phi4_source"] = "phi4_dir"
     return data
 
 
@@ -310,14 +348,241 @@ def is_pareto_optimal(objectives_matrix: np.ndarray) -> np.ndarray:
 
 # ── Parameterised defense selection ─────────────────────────────────────────
 
+def _normalise_objectives(objectives: np.ndarray, scheme: str) -> np.ndarray:
+    """Normalise a (n_candidates, n_objectives) maximisation matrix."""
+    matrix = np.asarray(objectives, dtype=float)
+    if scheme == "minmax":
+        lo = matrix.min(axis=0)
+        hi = matrix.max(axis=0)
+        return (matrix - lo) / (hi - lo + 1e-10)
+    if scheme == "fixed01":
+        # All four objectives are bounded in [0, 1] by construction, so a fixed
+        # normalisation removes the candidate-set dependence of Eq. 7.
+        return np.clip(matrix, 0.0, 1.0)
+    raise ValueError(f"unknown normalisation {scheme!r}; choose from 'minmax' or 'fixed01'")
+
+
 def select_defense(objectives: np.ndarray, defense_names: list,
-                   theta: tuple) -> str:
-    """Min-max normalise then pick defense maximising theta-weighted score."""
-    lo = objectives.min(axis=0)
-    hi = objectives.max(axis=0)
-    norm = (objectives - lo) / (hi - lo + 1e-10)
-    scores = norm @ np.array(theta)
+                   theta: tuple, *, normalise: str = "minmax") -> str:
+    """Normalise, then pick the defense maximising the theta-weighted score."""
+    norm = _normalise_objectives(objectives, normalise)
+    scores = norm @ np.asarray(theta, dtype=float)
     return defense_names[int(np.argmax(scores))]
+
+
+def select_topsis(objectives: np.ndarray, defense_names: list,
+                  theta: tuple, *, normalise: str = "vector") -> str:
+    """TOPSIS over the given candidates (all objectives are maximisation).
+
+    Vector-normalise, apply the preference weights, then rank by closeness to
+    the ideal point.  Used as the reference multi-criteria method in the
+    decision-method ablation (weighted sum without Pareto filtering is the
+    other comparator).
+    """
+    matrix = np.asarray(objectives, dtype=float)
+    if matrix.size == 0:
+        raise ValueError("TOPSIS needs at least one candidate")
+    if normalise == "vector":
+        denom = np.sqrt((matrix ** 2).sum(axis=0))
+        norm = matrix / np.where(denom == 0.0, 1.0, denom)
+    else:
+        norm = _normalise_objectives(matrix, normalise)
+    weighted = norm * np.asarray(theta, dtype=float)
+    ideal, anti_ideal = weighted.max(axis=0), weighted.min(axis=0)
+    dist_ideal = np.linalg.norm(weighted - ideal, axis=1)
+    dist_anti = np.linalg.norm(weighted - anti_ideal, axis=1)
+    denom = dist_ideal + dist_anti
+    closeness = np.where(denom > 0.0, dist_anti / denom, 0.0)
+    return defense_names[int(np.argmax(closeness))]
+
+
+def _pareto_front(means: pd.DataFrame, stds: pd.DataFrame,
+                  margin: float) -> pd.DataFrame:
+    """Uncertainty-aware Pareto front of an admissible candidate set."""
+    mask = is_pareto_optimal_uncertain(means, stds, margin)
+    return means[mask]
+
+
+def _pareto_weighted_selection(means: pd.DataFrame, stds: pd.DataFrame,
+                               margin: float, theta: tuple) -> str | None:
+    front = _pareto_front(means, stds, margin)
+    if front.empty:
+        return None
+    return select_defense(front[OBJECTIVE_COLUMNS].values, front.index.tolist(), theta)
+
+
+def compare_decision_methods(means: pd.DataFrame, stds: pd.DataFrame, margin: float,
+                             theta_presets: dict | None = None) -> pd.DataFrame:
+    """Decision-method ablation on one admissible candidate set.
+
+    Compares the proposed rule (Pareto + weighted sum) with weighted sum over
+    all admissible candidates, the fixed-[0,1] normalisation variant, and
+    TOPSIS with and without Pareto filtering.  This isolates what the Pareto
+    step and the Eq. 7 normalisation actually change.
+    """
+    presets = THETA_PRESETS if theta_presets is None else theta_presets
+    names = means.index.tolist()
+    matrix = means[OBJECTIVE_COLUMNS].values
+    front = _pareto_front(means, stds, margin)
+    rows = []
+    for name, theta in presets.items():
+        rows.append({
+            "theta_name": name,
+            "theta_values": str(theta),
+            "pareto_weighted": _pareto_weighted_selection(means, stds, margin, theta) or "N/A",
+            "weighted_no_pareto": select_defense(matrix, names, theta) if names else "N/A",
+            "weighted_fixed01": select_defense(matrix, names, theta, normalise="fixed01") if names else "N/A",
+            "topsis_no_pareto": select_topsis(matrix, names, theta) if names else "N/A",
+            "topsis_pareto": (select_topsis(front[OBJECTIVE_COLUMNS].values,
+                                            front.index.tolist(), theta)
+                              if not front.empty else "N/A"),
+            "n_candidates": len(names),
+            "pareto_size": int(len(front)),
+        })
+    return pd.DataFrame(rows)
+
+
+def candidate_dependence_table(means: pd.DataFrame, stds: pd.DataFrame, margin: float,
+                               theta_presets: dict | None = None) -> pd.DataFrame:
+    """Leave-one-out test of the Eq. 7 candidate-set dependence.
+
+    Recomputes the front and the recommendation after removing each candidate
+    in turn.  ``changed`` marks the recommendations that a change of the
+    candidate set would flip.
+    """
+    presets = THETA_PRESETS if theta_presets is None else theta_presets
+    rows = []
+    for name, theta in presets.items():
+        baseline = _pareto_weighted_selection(means, stds, margin, theta)
+        for removed in means.index:
+            kept = means.drop(index=removed)
+            kept_stds = stds.reindex(kept.index).fillna(0.0)
+            without = (_pareto_weighted_selection(kept, kept_stds, margin, theta)
+                       if not kept.empty else None)
+            rows.append({
+                "theta_name": name,
+                "removed": removed,
+                "selection": baseline or "N/A",
+                "selection_without": without or "N/A",
+                "changed": bool(without != baseline),
+            })
+    return pd.DataFrame(rows)
+
+
+def theta_grid(step: float = 0.05) -> np.ndarray:
+    """All preference vectors on the 4-simplex with the given grid step."""
+    n = int(round(1.0 / step))
+    if n < 1 or abs(n * step - 1.0) > 1e-9:
+        raise ValueError(f"theta step {step!r} must divide 1.0 exactly")
+    points = []
+    for i in range(n + 1):
+        for j in range(n + 1 - i):
+            for k in range(n + 1 - i - j):
+                last = n - i - j - k
+                points.append([i / n, j / n, k / n, last / n])
+    return np.asarray(points, dtype=float)
+
+
+def theta_sweep_table(means: pd.DataFrame, stds: pd.DataFrame, margin: float,
+                      step: float = 0.05) -> pd.DataFrame:
+    """Recommendation for every preference vector on the simplex grid.
+
+    This is the continuous version of the four manuscript presets: the shares in
+    ``theta_summary_table`` say how much of the preference space each defense
+    owns, and ``switching_boundaries`` gives the exact pairwise hyperplanes.
+    """
+    front = _pareto_front(means, stds, margin)
+    if front.empty:
+        return pd.DataFrame(columns=["theta1", "theta2", "theta3", "theta4", "selected"])
+    names = front.index.tolist()
+    normalised = _normalise_objectives(front[OBJECTIVE_COLUMNS].values, "minmax")
+    grid = theta_grid(step)
+    winners = np.argmax(normalised @ grid.T, axis=0)
+    frame = pd.DataFrame(grid, columns=["theta1", "theta2", "theta3", "theta4"])
+    frame["selected"] = [names[int(index)] for index in winners]
+    return frame
+
+
+def theta_summary_table(sweep: pd.DataFrame) -> pd.DataFrame:
+    """Share of the preference simplex that selects each defense."""
+    if sweep.empty:
+        return pd.DataFrame(columns=["defense", "n_regions", "share"])
+    counts = sweep["selected"].value_counts()
+    return pd.DataFrame({
+        "defense": counts.index,
+        "n_regions": counts.to_numpy(),
+        "share": (counts.to_numpy() / len(sweep)).round(6),
+    })
+
+
+def switching_boundaries(means: pd.DataFrame, stds: pd.DataFrame, margin: float,
+                         sweep: pd.DataFrame, step: float = 0.05) -> dict:
+    """Pairwise preference hyperplanes between defenses that appear in the sweep.
+
+    For candidates i and j the weighted scores differ by ``(n_i - n_j) @ theta``
+    with the min-max normalised objective vectors ``n``; i is preferred when the
+    dot product is positive.  The coefficients are exact, the sweep only decides
+    which pairs are worth reporting.
+    """
+    front = _pareto_front(means, stds, margin)
+    if front.empty or sweep.empty:
+        return {"step": step, "boundaries": []}
+    normalised = _normalise_objectives(front[OBJECTIVE_COLUMNS].values, "minmax")
+    names = front.index.tolist()
+    selected = set(sweep["selected"])
+    boundaries = []
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            first, second = names[i], names[j]
+            if first not in selected and second not in selected:
+                continue
+            coef = normalised[i] - normalised[j]
+            boundaries.append({
+                "pair": [first, second],
+                "coef": [round(float(value), 6) for value in coef],
+                "note": f"{first} is preferred when coef·theta > 0",
+            })
+    return {"step": step, "boundaries": boundaries}
+
+
+def admissibility_sweep_table(means: pd.DataFrame, stds: pd.DataFrame, margin: float,
+                              step: float = 0.05,
+                              theta_presets: dict | None = None) -> pd.DataFrame:
+    """Recommendation response to the admissibility thresholds (tau2, tau4).
+
+    Every cell reports how many candidates survive, the resulting front size and
+    the recommendation of each manuscript preset; ``no_candidate`` marks the
+    region where the deployment thresholds reject every defense.
+    """
+    presets = THETA_PRESETS if theta_presets is None else theta_presets
+    n = int(round(1.0 / step))
+    if n < 1 or abs(n * step - 1.0) > 1e-9:
+        raise ValueError(f"admissibility step {step!r} must divide 1.0 exactly")
+    thresholds = [index / n for index in range(n + 1)]
+    rows = []
+    for tau2 in thresholds:
+        for tau4 in thresholds:
+            admissible = means[(means["phi2"] >= tau2 - 1e-12) &
+                               (means["phi4"] >= tau4 - 1e-12)]
+            row: dict[str, object] = {
+                "tau2": round(tau2, 4), "tau4": round(tau4, 4),
+                "n_admissible": int(len(admissible)),
+                "pareto_size": 0,
+                "no_candidate": bool(admissible.empty),
+            }
+            front = pd.DataFrame()
+            if not admissible.empty:
+                kept_stds = stds.reindex(admissible.index).fillna(0.0)
+                front = _pareto_front(admissible, kept_stds, margin)
+                row["pareto_size"] = int(len(front))
+            for name, theta in presets.items():
+                row[f"selected_{name.lower()}"] = (
+                    select_defense(front[OBJECTIVE_COLUMNS].values,
+                                   front.index.tolist(), theta)
+                    if not front.empty else "none"
+                )
+            rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def is_pareto_optimal_uncertain(means: pd.DataFrame, stds: pd.DataFrame,
@@ -608,8 +873,8 @@ def plot_epsilon_pareto_evolution(data: dict[str, dict], out_path: str) -> None:
 
 def plot_theta_sensitivity(objectives: dict[str, pd.DataFrame], out_path: str) -> None:
     """One preference-sensitivity panel per backbone."""
-    theta_names  = list(THETA_PRESETS.keys())
-    theta_vals   = list(THETA_PRESETS.values())
+    theta_names  = list(ALL_THETA_PRESETS.keys())
+    theta_vals   = list(ALL_THETA_PRESETS.values())
 
     items = list(objectives.items())
     fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 2.8),
@@ -697,7 +962,7 @@ def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
 def write_selection_csv(objectives: dict[str, pd.DataFrame], out_path: str) -> None:
     """Write the preference-preset selection for every available backbone."""
     rows = []
-    for name, theta in THETA_PRESETS.items():
+    for name, theta in ALL_THETA_PRESETS.items():
         row: dict[str, str] = {"theta_name": name, "theta_values": str(theta)}
         for key in BACKBONE_LABELS:
             objective = objectives.get(key, pd.DataFrame())
@@ -786,6 +1051,10 @@ def parse_args():
                    help="admissibility threshold: drop candidates with worst-class recall below this")
     p.add_argument("--no-figs",      action="store_true",
                    help="Skip figure generation")
+    p.add_argument("--theta-step", type=float, default=0.05,
+                   help="grid step of the preference-simplex sweep (theta_sweep.csv)")
+    p.add_argument("--admissibility-step", type=float, default=0.05,
+                   help="grid step of the tau2/tau4 sweep (admissibility_sweep.csv)")
     return p.parse_args()
 
 
@@ -889,6 +1158,38 @@ def main() -> int:
             stds=entry["stds"],
             pareto_deterministic=entry.get("mask_deterministic"),
             admissible=entry["admissible"])
+        if "kept" in entry:
+            comparison = compare_decision_methods(
+                entry["kept"], entry["kept_stds"], args.confidence_margin)
+            comparison_path = os.path.join(base_dir, "decision_comparators.csv")
+            comparison.to_csv(comparison_path, index=False)
+            print(f"  Saved: {comparison_path}")
+            dependence = candidate_dependence_table(
+                entry["kept"], entry["kept_stds"], args.confidence_margin)
+            dependence_path = os.path.join(base_dir, "candidate_dependence.csv")
+            dependence.to_csv(dependence_path, index=False)
+            print(f"  Saved: {dependence_path}")
+            sweep = theta_sweep_table(entry["kept"], entry["kept_stds"],
+                                      args.confidence_margin, step=args.theta_step)
+            sweep_path = os.path.join(base_dir, "theta_sweep.csv")
+            sweep.to_csv(sweep_path, index=False)
+            print(f"  Saved: {sweep_path} ({len(sweep)} preference vectors)")
+            summary_path = os.path.join(base_dir, "theta_summary.csv")
+            theta_summary_table(sweep).to_csv(summary_path, index=False)
+            print(f"  Saved: {summary_path}")
+            boundary_path = os.path.join(base_dir, "switching_regions.json")
+            with open(boundary_path, "w", encoding="utf-8") as handle:
+                json.dump(switching_boundaries(entry["kept"], entry["kept_stds"],
+                                               args.confidence_margin, sweep,
+                                               step=args.theta_step),
+                          handle, indent=2, ensure_ascii=False)
+            print(f"  Saved: {boundary_path}")
+            admissibility = admissibility_sweep_table(
+                entry["kept"], entry["kept_stds"], args.confidence_margin,
+                step=args.admissibility_step)
+            admissibility_path = os.path.join(base_dir, "admissibility_sweep.csv")
+            admissibility.to_csv(admissibility_path, index=False)
+            print(f"  Saved: {admissibility_path} ({len(admissibility)} threshold cells)")
 
     objectives = {
         key: prepared[key].get("kept", prepared[key]["means"].iloc[0:0])
@@ -913,6 +1214,7 @@ def main() -> int:
                 "inadmissible": prepared[key]["dropped"],
                 "pareto_uncertain": prepared[key]["pareto_uncertain"],
                 "pareto_deterministic": prepared[key]["pareto_deterministic"],
+                "phi4_source": data[key].get("phi4_source", "missing"),
                 "dispersion_available": bool(
                     not prepared[key]["stds"].empty and prepared[key]["stds"].to_numpy().sum() > 0),
             }

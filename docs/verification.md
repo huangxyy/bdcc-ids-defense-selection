@@ -36,13 +36,15 @@ uv run python scripts/verify.py --quick
 | 6 复现计划 | `uv run python scripts/run_experiments.py --dry-run` | 三个骨干的命令、路径、设备参数 | 秒 |
 | 7 真实运行 | `uv run python scripts/run_experiments.py --device cuda` | 表 3–5 的原始数据 | 数小时 |
 | 8 产物校验 | `uv run python scripts/check_outputs.py --require-analysis` | 必需文件/列、官方划分、种子数、离散度 | 秒 |
+| 9 实验留痕 | `uv run python scripts/log_experiment.py --outputs-dir outputs/<run> --record-dir <dir> --title "..."` | 生成 markdown 记录(数值自动来自 CSV)并登记 INDEX.md | 秒 |
+| 10 权重复用 | `uv run python scripts/evaluate_checkpoints.py --checkpoint outputs/<run>/checkpoints/seed7 --output-dir outputs/<eval>` | 加载已训练权重做评测变体(ε/步长/自适应),不重训 | 分钟 |
 
 ## 3. 论文内容 → 命令 → 产物
 
 | 论文内容 | 命令 | 产物 |
 |---|---|---|
 | 表 3–5 四维画像 | `scripts/run_mlp.py` / `run_cnn1d.py` / `run_ft_transformer.py` | `outputs/<backbone>/{raw,mean,std}_results.csv`、`efficiency_*.csv`、`category_*.csv` |
-| 表 6–7 帕累托与偏好选择 | `scripts/pareto_selection.py` | `risk_profile_4d.csv`、`pareto_selection_results.csv`、`decision_settings.json`、`outputs/figures/*` |
+| 表 6–7 帕累托与偏好选择 | `scripts/pareto_selection.py` | `risk_profile_4d.csv`、`decision_comparators.csv`、`candidate_dependence.csv`、`theta_sweep.csv`、`theta_summary.csv`、`switching_regions.json`、`admissibility_sweep.csv`、`pareto_selection_results.csv`、`decision_settings.json`、`outputs/figures/*` |
 | phi4 最差类别召回 | `scripts/evaluate_phi4_cnn.py`、`evaluate_phi4_ft.py` | `outputs/phi4_*/category_*.csv` |
 | 攻击泛化 | 主运行内置 | `attack_generalization.csv` |
 | 自适应攻击 | `run_* --adaptive-eval` | `adaptive_attack_{raw,mean}.csv` |

@@ -253,6 +253,24 @@ uv run python scripts/run_experiments.py --device cuda \
   --set learning_rate=2e-3 --set adv_epsilon=0.09
 ```
 
+### Train once, evaluate many times
+
+`--save-checkpoints` stores the shared baseline and all six defenses (plus the
+feature masks, cost table and the exact config) under
+`<output-dir>/checkpoints/seed<seed>/`. Evaluation variants then rerun without
+retraining:
+
+```bash
+uv run python scripts/run_ft_transformer.py --device cuda --save-checkpoints \
+  --output-dir outputs/ft_transformer
+
+uv run python scripts/evaluate_checkpoints.py \
+  --checkpoint outputs/ft_transformer/checkpoints/seed7 \
+  --output-dir outputs/ft_eval_probe --device cuda \
+  --eval-pgd-alpha-ratio 0.10 --eval-pgd-steps 50 \
+  --epsilon-list 0.05,0.10,0.20 --adaptive-eval
+```
+
 Backbones run **sequentially on purpose**: running them in parallel makes them compete for the
 GPU, which would corrupt the training-cost measurements feeding objective `phi3`.
 
@@ -331,6 +349,7 @@ The FT-Transformer dominates the total cost. All backbones also run on CPU, subs
 | Batch size | 1024 (MLP, 1D-CNN); 512 (FT-Transformer) |
 | Dropout | 0.15 |
 | FT-Transformer capacity | d_token = 32, heads = 2, layers = 2, d_ffn = 64 (`--ft-d-token`, `--ft-n-heads`, `--ft-n-layers`, `--ft-d-ffn`) |
+| Checkpoints | off by default; `--save-checkpoints` writes `<output-dir>/checkpoints/seed<seed>/` (all defenses + metadata) for evaluation-only reruns |
 | Random seeds | 7, 13, 21, 42, 100 (set with --seeds) |
 | Evaluation subset | 20,000 stratified test samples (`--eval-attack-rows`), fixed seed 2026 (`--eval-subset-seed`), shared by all defenses |
 | **Adversarial training budget** | **epsilon = 0.06, alpha = 0.015, 20 steps** (FT-Transformer: 7 training steps) |
@@ -362,7 +381,7 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 
 **Every field of `ExperimentConfig` is a command-line flag.** The flags are generated from the
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
-`ExperimentConfig` automatically adds a flag. All 55 fields are exposed identically by all three
+`ExperimentConfig` automatically adds a flag. All 56 fields are exposed identically by all three
 backbone scripts.
 
 Each field also carries its own help text and legacy flag aliases as dataclass metadata, and the

@@ -132,6 +132,7 @@ class TrainingConfig:
     ft_n_heads: int = 2
     ft_n_layers: int = 2
     ft_d_ffn: int = 64
+    save_checkpoints: bool = False
 
     def problems(self) -> list[str]:
         issues = []
@@ -395,6 +396,12 @@ class ExperimentConfig:
     ft_n_heads: int = option(2, "FT-Transformer attention heads (must divide ft_d_token)", group="training")
     ft_n_layers: int = option(2, "FT-Transformer encoder layers", group="training")
     ft_d_ffn: int = option(64, "FT-Transformer feed-forward width", group="training")
+    save_checkpoints: bool = option(
+        False,
+        "save the trained weights under <output_dir>/checkpoints/seed<seed> "
+        "so evaluation variants can rerun without retraining",
+        group="training",
+    )
 
     # --- adversarial training budget ----------------------------------------
     adv_epsilon: float = option(

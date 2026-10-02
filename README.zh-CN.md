@@ -240,6 +240,22 @@ uv run python scripts/run_experiments.py --device cuda \
   --set learning_rate=2e-3 --set adv_epsilon=0.09
 ```
 
+### 训练一次、评测多次
+
+`--save-checkpoints` 会把共享基线、六种防御、掩码、训练成本表和完整配置存到
+`<output-dir>/checkpoints/seed<seed>/`;之后换评测参数不用再训练:
+
+```bash
+uv run python scripts/run_ft_transformer.py --device cuda --save-checkpoints \
+  --output-dir outputs/ft_transformer
+
+uv run python scripts/evaluate_checkpoints.py \
+  --checkpoint outputs/ft_transformer/checkpoints/seed7 \
+  --output-dir outputs/ft_eval_probe --device cuda \
+  --eval-pgd-alpha-ratio 0.10 --eval-pgd-steps 50 \
+  --epsilon-list 0.05,0.10,0.20 --adaptive-eval
+```
+
 各个骨干网络**故意串行运行**：并行运行会让它们争抢 GPU，从而污染用于目标 phi3 的训练成本测量。
 
 每次运行写入 `outputs/<backbone>/`：
@@ -313,6 +329,7 @@ FT-Transformer 占总成本的绝大部分。所有骨干网络也能在 CPU 上
 | 批大小 | 1024（MLP、1D-CNN）；512（FT-Transformer） |
 | Dropout | 0.15 |
 | FT-Transformer 容量 | d_token = 32，heads = 2，layers = 2，d_ffn = 64（`--ft-d-token`、`--ft-n-heads`、`--ft-n-layers`、`--ft-d-ffn`） |
+| 权重存档 | 默认关闭;`--save-checkpoints` 写入 `<output-dir>/checkpoints/seed<seed>/`(六种防御 + 元数据),供只评测复用 |
 | 随机种子 | 7、13、21、42、100（用 `--seeds` 设置） |
 | 评测子集 | 20,000 条分层测试样本（`--eval-attack-rows`），固定种子 2026（`--eval-subset-seed`），所有防御共享 |
 | **对抗训练预算** | **epsilon = 0.06，alpha = 0.015，20 步**（FT-Transformer：训练 7 步） |
@@ -342,7 +359,7 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 ## 完整参数化
 
 **`ExperimentConfig` 的每个字段都是一个命令行参数。** 参数由 dataclass 自动生成，因此 CLI
-不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 55 个字段在三个
+不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 56 个字段在三个
 骨干脚本中完全一致。
 
 每个字段的帮助文本和旧参数别名都写在 dataclass 元数据里；配置在构造时就会做校验：像

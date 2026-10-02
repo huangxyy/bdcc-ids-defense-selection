@@ -9,16 +9,17 @@ import pytest
 
 from ids_defense_selection.paths import PROJECT_ROOT
 from ids_defense_selection.selection import (
+    ALL_THETA_PRESETS,
     BACKBONE_CLI_KEYS,
     BACKBONE_DIRS,
     BACKBONE_LABELS,
     BACKBONE_SELECTION_COLUMNS,
-    THETA_PRESETS,
     apply_admissibility,
     build_objective_matrices,
     build_objective_matrix,
     is_pareto_optimal,
     is_pareto_optimal_uncertain,
+    load_backbone_data,
     resolve_outputs_root,
     select_defense,
     write_selection_csv,
@@ -189,6 +190,25 @@ def test_backbone_constants_cover_the_decision_layer() -> None:
     assert set(BACKBONE_CLI_KEYS.values()) == {"mlp", "cnn", "ft"}
 
 
+def test_cnn_phi4_falls_back_to_the_dedicated_run(tmp_path: Path) -> None:
+    """The CNN delegates phi4; the decision layer must find outputs/phi4_cnn."""
+    backbone_dir = tmp_path / "cnn1d"
+    backbone_dir.mkdir()
+    pd.DataFrame({"model": ["standard"], "attack": ["pgd"], "epsilon": [0.10],
+                  "f1": [0.9], "attack_success_rate": [0.1]}) \
+        .to_csv(backbone_dir / "mean_results.csv", index=False)
+
+    phi4_dir = tmp_path / "phi4_cnn"
+    phi4_dir.mkdir()
+    pd.DataFrame({"seed": [7], "model": ["standard"], "attack": ["pgd"],
+                  "epsilon": [0.10], "attack_cat": ["DoS"],
+                  "adv_recall": [0.5]}).to_csv(phi4_dir / "category_raw_results.csv", index=False)
+
+    data = load_backbone_data("CNN", {"CNN": str(backbone_dir)})
+    assert data["phi4_source"] == "phi4_dir"
+    assert "category_raw_results" in data
+
+
 def test_selection_csv_has_one_column_per_backbone(tmp_path: Path) -> None:
     """The selection table must cover MLP, 1D-CNN and FT-Transformer."""
     objectives = {
@@ -204,7 +224,7 @@ def test_selection_csv_has_one_column_per_backbone(tmp_path: Path) -> None:
     write_selection_csv(objectives, str(path))
 
     frame = pd.read_csv(path)
-    assert len(frame) == len(THETA_PRESETS)
+    assert len(frame) == len(ALL_THETA_PRESETS)
     assert set(frame.columns) == {
         "theta_name", "theta_values",
         "mlp_selected", "cnn_selected", "ft_selected",

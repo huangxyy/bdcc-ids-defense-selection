@@ -32,6 +32,7 @@ from ids_defense_selection import (
     make_dataloader,
     resolve_device,
     resolve_path,
+    save_checkpoint,
     set_seed,
     split_summary,
     stratified_subset_indices,
@@ -105,6 +106,12 @@ def main() -> None:
             metadata=metadata,
             seed=seed,
         )
+        if config.save_checkpoints:
+            checkpoint_dir = save_checkpoint(
+                out_dir, trained, config, seed=seed, backbone="cnn1d",
+                input_dim=x_train.shape[1],
+                dataset_split=split_summary(len(train_df), len(test_df)))
+            print(f"[cnn1d][seed {seed}] checkpoint saved: {checkpoint_dir}", flush=True)
         print(f"[cnn1d][seed {seed}] evaluation started", flush=True)
         evaluation = evaluate_defenses(
             trained, config, eval_set, device, seed,

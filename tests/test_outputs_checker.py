@@ -63,6 +63,14 @@ def _run_checker(root: Path) -> subprocess.CompletedProcess:
     )
 
 
+def _run_checker_require_checkpoints(root: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(root), "--backbones", "mlp",
+         "--require-checkpoints"],
+        capture_output=True, text=True, timeout=300, check=False,
+    )
+
+
 def test_checker_accepts_a_complete_run(tmp_path: Path) -> None:
     _write_minimal_run(tmp_path)
     completed = _run_checker(tmp_path)
@@ -76,3 +84,16 @@ def test_checker_rejects_a_missing_artefact(tmp_path: Path) -> None:
     completed = _run_checker(tmp_path)
     assert completed.returncode == 1
     assert "missing mean_results.csv" in completed.stdout
+
+
+def test_checker_requires_checkpoints_when_asked(tmp_path: Path) -> None:
+    out = _write_minimal_run(tmp_path)
+    completed = _run_checker_require_checkpoints(tmp_path)
+    assert completed.returncode == 1
+    assert "no checkpoints" in completed.stdout
+
+    checkpoint = out / "checkpoints" / "seed7"
+    checkpoint.mkdir(parents=True)
+    (checkpoint / "trained_defenses.pt").write_bytes(b"stub")
+    (checkpoint / "metadata.json").write_text("{}", encoding="utf-8")
+    assert _run_checker_require_checkpoints(tmp_path).returncode == 0
