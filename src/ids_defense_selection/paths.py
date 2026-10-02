@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: Repository root: the directory that contains run_experiments.py and pyproject.toml.
+#: Repository root: the directory that contains pyproject.toml, src/ and scripts/.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 #: Default dataset directory and default root of the output tree.
@@ -22,7 +22,7 @@ BACKBONE_OUTPUT_SUBDIRS: dict[str, str] = {
     "ft": "ft_transformer",
 }
 
-#: Backbone CLI key -> experiment runner script inside ``code/``.
+#: Backbone CLI key -> experiment runner script inside ``scripts/``.
 BACKBONE_RUNNERS: dict[str, str] = {
     "mlp": "run_mlp.py",
     "cnn": "run_cnn1d.py",

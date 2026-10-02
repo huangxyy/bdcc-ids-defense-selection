@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 """Print the compute-device report (CPU / CUDA / MPS) for this machine.
 
-    uv run python code/check_devices.py
+    uv run python scripts/check_devices.py
 
 Use ``--device auto`` (the default) to let every runner pick the best available
 device, or ``--device cpu`` / ``--device cuda`` / ``--device cuda:1`` to pin one.
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from ids_defense_selection import device_report
 

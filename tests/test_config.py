@@ -293,8 +293,8 @@ def test_default_config_report_covers_every_flag() -> None:
 
 
 def test_config_module_runs_as_a_plain_script(tmp_path: Path) -> None:
-    """`python code/ids_defense_selection/config.py` must not break on relative imports."""
-    script = PROJECT_ROOT / "code" / "ids_defense_selection" / "config.py"
+    """`python src/ids_defense_selection/config.py` must not break on relative imports."""
+    script = PROJECT_ROOT / "src" / "ids_defense_selection" / "config.py"
     completed = subprocess.run(
         [sys.executable, str(script)],
         capture_output=True, text=True, cwd=tmp_path, check=False,

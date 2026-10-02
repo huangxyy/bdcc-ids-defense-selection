@@ -7,9 +7,11 @@ This is the variant whose numbers are the more defensible cross-dataset result.
 
 Depends on run_cicids2017.py for the shared loading utilities.
 
-    uv run python code/run_cicids2017_source_disjoint.py --device cuda
+    uv run python scripts/run_cicids2017_source_disjoint.py --device cuda
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import json

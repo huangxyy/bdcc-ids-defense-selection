@@ -23,22 +23,21 @@ Checks
 
 Usage
 -----
-    python code/smoke_test.py
-    python code/smoke_test.py --data-dir data --device cuda
+    uv run python scripts/smoke_test.py
+    uv run python scripts/smoke_test.py --data-dir data --device cuda
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import sys
 import time
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ids_defense_selection as idsds                              # noqa: E402
 from ids_defense_selection import CNN1DBackbone      # noqa: E402
@@ -83,7 +82,7 @@ def main() -> int:
     print("\n1. Data")
     tr_p, te_p = d / "train.csv", d / "test.csv"
     if not tr_p.exists() or not te_p.exists():
-        print(f"  [FAIL] {tr_p} and/or {te_p} not found. Run 'python code/prepare_data.py' first.")
+        print(f"  [FAIL] {tr_p} and/or {te_p} not found. Run 'python scripts/prepare_data.py' first.")
         return 2
     t = time.perf_counter()
     # utf-8-sig so a byte-order mark cannot rename the `id` column to "\ufeffid"
@@ -95,7 +94,7 @@ def main() -> int:
           f"{len(train_df.columns)} columns")
     if len(train_df) != TRAIN_ROWS or len(test_df) != TEST_ROWS:
         check("official split direction", "FAIL",
-              f"expected {TRAIN_ROWS:,} / {TEST_ROWS:,} -- run 'uv run python code/prepare_data.py'")
+              f"expected {TRAIN_ROWS:,} / {TEST_ROWS:,} -- run 'uv run python scripts/prepare_data.py'")
     else:
         check("official split direction", "PASS", f"{TRAIN_ROWS:,} train / {TEST_ROWS:,} test")
 
@@ -222,7 +221,7 @@ def main() -> int:
         print("  Environment and data are ready.")
         if nskip:
             print("  (SKIP entries are informational, not failures.)")
-        print("  Next:  uv run python run_experiments.py          # --device auto by default")
+        print("  Next:  uv run python scripts/run_experiments.py          # --device auto by default")
     else:
         print("  Fix the failures above before starting the full experiments.")
     print("=" * 78)

@@ -14,11 +14,13 @@ This script detects that case and can fix it.
 
 Usage
 -----
-    python code/prepare_data.py                 # check only
-    python code/prepare_data.py --fix-swap      # swap the two files if reversed
-    python code/prepare_data.py --data-dir data
+    python scripts/prepare_data.py                 # check only
+    python scripts/prepare_data.py --fix-swap      # swap the two files if reversed
+    python scripts/prepare_data.py --data-dir data
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import os
@@ -106,8 +108,8 @@ def main() -> int:
         print("  Dataset layout is correct -- you can run the experiments.")
         print()
         print("  Next steps:")
-        print("    uv run python code/smoke_test.py                   # ~1 minute sanity check")
-        print("    uv run python run_experiments.py                   # full reproduction (--device auto)")
+        print("    uv run python scripts/smoke_test.py                   # ~1 minute sanity check")
+        print("    uv run python scripts/run_experiments.py                   # full reproduction (--device auto)")
         return 0
 
     print("  Dataset is not ready. Download UNSW-NB15 from")

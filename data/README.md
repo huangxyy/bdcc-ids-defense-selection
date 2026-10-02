@@ -27,7 +27,7 @@ Both files must contain the columns used by the code, in particular
 ### Verify the layout
 
 ```bash
-uv run python code/prepare_data.py
+uv run python scripts/prepare_data.py
 ```
 
 This counts the records in each file and compares them against the official partition sizes.
@@ -44,15 +44,15 @@ It is easy to download `UNSW_NB15_training-set.csv` and `UNSW_NB15_testing-set.c
 the small partition and evaluate on the large one. `prepare_data.py` detects this and can repair it:
 
 ```bash
-uv run python code/prepare_data.py --fix-swap
+uv run python scripts/prepare_data.py --fix-swap
 ```
 
 After the swap, `train.csv` holds 175,341 records and `test.csv` holds 82,332 -- the official direction.
 
 ## CIC-IDS2017 (optional)
 
-**Not** shipped with the repository; only needed by `code/run_cicids2017.py` and
-`code/run_cicids2017_source_disjoint.py`.
+**Not** shipped with the repository; only needed by `scripts/run_cicids2017.py` and
+`scripts/run_cicids2017_source_disjoint.py`.
 
 Source: <https://www.unb.ca/cic/datasets/ids-2017.html>
 

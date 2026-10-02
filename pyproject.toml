@@ -29,8 +29,10 @@ dependencies = [
     "requests>=2.31",
 ]
 
-# The repository is a collection of scripts, not an installable package:
-# uv manages the environment and the lockfile, `uv sync` does not build the project.
+# The repository is a research artifact, not an installed package: uv manages the
+# environment and the lockfile, `uv sync` does not build the project.  Entry
+# points under scripts/ import scripts/_bootstrap.py, which puts src/ on
+# sys.path; pytest is pointed at src/ through the setting below.
 [tool.uv]
 package = false
 
@@ -50,7 +52,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["code"]
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]

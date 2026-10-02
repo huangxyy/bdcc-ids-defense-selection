@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """Run the MLP backbone experiment (the reference pipeline).
 
-    uv run python code/run_mlp.py --device cuda
+    uv run python scripts/run_mlp.py --device cuda
 
 Trains the six defenses, evaluates the full attack suite plus the transfer
 matrix, the sensitivity-ratio ablation and the reference models, and writes all
 tables and figures into outputs/mlp/ by default.
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from ids_defense_selection import (
     DEFAULT_DATA_DIR,

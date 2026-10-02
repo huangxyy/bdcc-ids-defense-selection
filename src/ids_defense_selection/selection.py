@@ -6,9 +6,10 @@ across MLP and 1D-CNN backbones, finds the Pareto front, and generates
 publication-quality figures and summary CSV tables.
 
 Usage:
-    python code/pareto_selection.py
-    python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
+    uv run python scripts/pareto_selection.py
+    uv run python scripts/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -23,15 +24,15 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
-from ids_defense_selection import style as FS
-from ids_defense_selection.config import DEFAULT_EPSILON_LIST
-from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT, resolve_path
+from . import style as FS
+from .config import DEFAULT_EPSILON_LIST
+from .paths import BACKBONE_OUTPUT_SUBDIRS, DEFAULT_OUTPUT_ROOT, resolve_path
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 FS.apply_style()
 
-# Canonical output directories written by run_experiments.py (and the
+# Canonical output directories written by scripts/run_experiments.py (and the
 # CIC-IDS2017 script).  --outputs-root shifts the whole tree.
 BACKBONE_DIRS = {
     "MLP": BACKBONE_OUTPUT_SUBDIRS["mlp"],
@@ -791,7 +792,7 @@ def main() -> int:
     if missing:
         for key in missing:
             print(f"  [missing] {dirs[key]}/mean_results.csv -- "
-                  f"run 'uv run python run_experiments.py --backbones {key.lower()}' first")
+                  f"run 'uv run python scripts/run_experiments.py --backbones {key.lower()}' first")
         if len(missing) == len(("MLP", "CNN")):
             print("\nNo backbone results found; nothing to analyse.")
             return 1

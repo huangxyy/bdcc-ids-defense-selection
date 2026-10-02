@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """Run the 1D-CNN backbone experiment.
 
-    uv run python code/run_cnn1d.py --device cuda
+    uv run python scripts/run_cnn1d.py --device cuda
 
 Trains the six defenses on the 1D-CNN backbone, evaluates the attack suite,
 the attack-validity checks and a full-test PGD attack, and writes the standard
 backbone outputs into outputs/cnn1d/ by default.
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from pathlib import Path
 

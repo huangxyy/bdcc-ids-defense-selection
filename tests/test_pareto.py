@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from ids_defense_selection.paths import PROJECT_ROOT
-from pareto_selection import (
+from ids_defense_selection.selection import (
     apply_admissibility,
     build_objective_matrices,
     build_objective_matrix,

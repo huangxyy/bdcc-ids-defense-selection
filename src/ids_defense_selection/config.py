@@ -30,7 +30,7 @@ from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-# Allow `python code/ids_defense_selection/config.py`: a module executed by file
+# Allow `python src/ids_defense_selection/config.py`: a module executed by file
 # path has no parent package, so it cannot resolve the relative imports below.
 # Give it the package it belongs to before those imports run.
 if __package__ in (None, ""):

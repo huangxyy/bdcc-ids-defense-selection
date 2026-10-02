@@ -8,6 +8,7 @@ These guard the three failure modes we hit in practice:
   which no longer exists;
 * the PyPI ``pathlib`` backport shadowing the standard library.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -24,6 +25,65 @@ def test_every_submodule_imports() -> None:
     assert module_names, "the package must expose at least one submodule"
     for name in module_names:
         importlib.import_module(f"ids_defense_selection.{name}")
+
+
+def test_submodule_list_matches_the_package_directory() -> None:
+    """`_SUBMODULES` must not drift when a module is added or renamed."""
+    on_disk = {m.name for m in pkgutil.iter_modules(idsds.__path__)}
+    assert set(idsds._SUBMODULES) == on_disk
+
+
+def test_submodules_are_reachable_as_attributes() -> None:
+    """`import ids_defense_selection as idsds; idsds.style` must work."""
+    for name in idsds._SUBMODULES:
+        module = getattr(idsds, name)
+        assert module.__name__ == f"ids_defense_selection.{name}"
+    assert idsds.paths.PROJECT_ROOT == idsds.DEFAULT_DATA_DIR.parent
+
+
+def test_export_names_do_not_shadow_submodules() -> None:
+    """A name must mean one thing; otherwise the submodule branch wins silently."""
+    assert set(idsds._EXPORTS).isdisjoint(idsds._SUBMODULES)
+
+
+def test_type_checking_block_declares_every_lazy_export() -> None:
+    """IDEs need the flat exports re-declared under ``TYPE_CHECKING``.
+
+    Without them, ``__getattr__ -> Any`` wins and hover/go-to-definition breaks.
+    """
+    import ast
+
+    source = pathlib.Path(idsds.__file__).read_text(encoding="utf-8")
+    declared: dict[str, str] = {}
+    submodules: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Name)):
+            continue
+        if node.test.id != "TYPE_CHECKING":
+            continue
+        for stmt in node.body:
+            if not isinstance(stmt, ast.ImportFrom) or stmt.level != 1:
+                continue
+            for alias in stmt.names:
+                if stmt.module is None:
+                    submodules.add(alias.name)
+                else:
+                    declared[alias.name] = f".{stmt.module}"
+    assert submodules == set(idsds._SUBMODULES)
+    assert declared == idsds._EXPORTS, (
+        "the TYPE_CHECKING re-exports drifted from _EXPORTS; add or remove the names so both maps match"
+    )
+
+
+def test_unknown_attribute_suggests_the_closest_names() -> None:
+    with pytest.raises(AttributeError, match="did you mean"):
+        idsds.ExpermentConfig  # noqa: B018 - the typo is the point
+
+
+def test_dunder_dir_lists_exports_and_submodules() -> None:
+    listing = dir(idsds)
+    assert set(idsds.__all__) <= set(listing)
+    assert set(idsds._SUBMODULES) <= set(listing)
 
 
 def test_every_public_export_resolves() -> None:

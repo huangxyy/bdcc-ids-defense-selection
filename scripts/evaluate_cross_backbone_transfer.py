@@ -6,11 +6,13 @@ then measures how adversarial examples generated on one architecture transfer
 to the other two.  The attacks obey the same feature constraints as the main
 experiment (continuous features only, inside the training [min, max] box).
 
-    uv run python code/evaluate_cross_backbone_transfer.py --device cuda
+    uv run python scripts/evaluate_cross_backbone_transfer.py --device cuda
 
 Outputs (appendix tables): outputs/cross_backbone_transfer_{raw,mean}.csv
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from pathlib import Path
 
