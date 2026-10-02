@@ -19,15 +19,25 @@ grouped views from drifting apart.  This module imports only the standard
 library plus the stdlib-only :mod:`ids_defense_selection.paths` module, which
 keeps ``--dry-run`` and other tooling usable without torch.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass, field, fields
+import sys
+from dataclasses import MISSING, asdict, dataclass, field, fields
+from pathlib import Path
 from typing import Any
 
-from .paths import DEFAULT_DATA_DIR
+# Allow `python src/ids_defense_selection/config.py`: a module executed by file
+# path has no parent package, so it cannot resolve the relative imports below.
+# Give it the package it belongs to before those imports run.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "ids_defense_selection"
+
+from .paths import DEFAULT_DATA_DIR  # noqa: E402 - needs the guard above
 
 # --------------------------------------------------------------------------- #
 # Shared defaults and vocabularies
@@ -54,7 +64,13 @@ AttackSetting = tuple[str, float]
 
 #: Order in which the groups are printed and stored.
 GROUP_ORDER: tuple[str, ...] = (
-    "paths", "training", "attack", "evaluation", "methods", "sensitivity", "runtime",
+    "paths",
+    "training",
+    "attack",
+    "evaluation",
+    "methods",
+    "sensitivity",
+    "runtime",
 )
 
 
@@ -116,8 +132,9 @@ class TrainingConfig:
     def problems(self) -> list[str]:
         issues = []
         if self.training_budget_mode not in TRAINING_BUDGET_MODES:
-            issues.append(f"training_budget_mode must be one of {TRAINING_BUDGET_MODES}, "
-                          f"got {self.training_budget_mode!r}")
+            issues.append(
+                f"training_budget_mode must be one of {TRAINING_BUDGET_MODES}, got {self.training_budget_mode!r}"
+            )
         if self.batch_size < 1:
             issues.append("batch_size must be >= 1")
         if self.baseline_epochs < 0:
@@ -129,8 +146,7 @@ class TrainingConfig:
         if self.weight_decay < 0:
             issues.append("weight_decay must be >= 0")
         if len(self.hidden_dims) != 3 or any(h < 1 for h in self.hidden_dims):
-            issues.append(f"hidden_dims must be three positive integers, "
-                          f"got {tuple(self.hidden_dims)!r}")
+            issues.append(f"hidden_dims must be three positive integers, got {tuple(self.hidden_dims)!r}")
         if not 0.0 <= self.dropout < 1.0:
             issues.append("dropout must be in [0, 1)")
         return issues
@@ -213,11 +229,9 @@ class EvaluationConfig:
         if self.full_test_attack_rows < 0:
             issues.append("full_test_attack_rows must be >= 0")
         if self.category_attack not in ATTACK_NAMES:
-            issues.append(f"category_attack must be one of {ATTACK_NAMES}, "
-                          f"got {self.category_attack!r}")
+            issues.append(f"category_attack must be one of {ATTACK_NAMES}, got {self.category_attack!r}")
         if self.ratio_attack not in ATTACK_NAMES:
-            issues.append(f"ratio_attack must be one of {ATTACK_NAMES}, "
-                          f"got {self.ratio_attack!r}")
+            issues.append(f"ratio_attack must be one of {ATTACK_NAMES}, got {self.ratio_attack!r}")
         if self.category_epsilon <= 0:
             issues.append("category_epsilon must be > 0")
         if self.ratio_attack_epsilon <= 0:
@@ -228,8 +242,7 @@ class EvaluationConfig:
             issues.append("adaptive_steps must be >= 1")
         if self.adaptive_restarts < 1:
             issues.append("adaptive_restarts must be >= 1")
-        for name in ("transfer_attack_settings", "validity_attack_settings",
-                     "full_test_attack_settings"):
+        for name in ("transfer_attack_settings", "validity_attack_settings", "full_test_attack_settings"):
             for attack, epsilon in getattr(self, name):
                 if attack not in ATTACK_NAMES:
                     issues.append(f"{name}: unknown attack {attack!r}; choose from {ATTACK_NAMES}")
@@ -261,8 +274,9 @@ class MethodsConfig:
         if self.class_aware_minority_weight <= 0:
             issues.append("class_aware_minority_weight must be > 0")
         if not set(self.extra_methods) <= set(OPTIONAL_DEFENSE_METHODS):
-            issues.append(f"extra_methods must be a subset of {OPTIONAL_DEFENSE_METHODS}, "
-                          f"got {tuple(self.extra_methods)!r}")
+            issues.append(
+                f"extra_methods must be a subset of {OPTIONAL_DEFENSE_METHODS}, got {tuple(self.extra_methods)!r}"
+            )
         if not self.progressive_ratios or any(not 0.0 < r <= 1.0 for r in self.progressive_ratios):
             issues.append("progressive_ratios must contain ratios in (0, 1]")
         if self.sa_trades_gamma <= 0:
@@ -272,8 +286,9 @@ class MethodsConfig:
         if not 0.0 <= self.dst_ema_alpha <= 1.0:
             issues.append("dst_ema_alpha must be in [0, 1]")
         if not set(self.reference_models) <= set(REFERENCE_MODEL_NAMES):
-            issues.append(f"reference_models must be a subset of {REFERENCE_MODEL_NAMES}, "
-                          f"got {tuple(self.reference_models)!r}")
+            issues.append(
+                f"reference_models must be a subset of {REFERENCE_MODEL_NAMES}, got {tuple(self.reference_models)!r}"
+            )
         return issues
 
 
@@ -289,8 +304,7 @@ class SensitivityConfig:
         issues = []
         if not 0.0 < self.sensitivity_top_ratio <= 1.0:
             issues.append("sensitivity_top_ratio must be in (0, 1]")
-        if (not self.sensitivity_ratio_list
-                or any(not 0.0 < r <= 1.0 for r in self.sensitivity_ratio_list)):
+        if not self.sensitivity_ratio_list or any(not 0.0 < r <= 1.0 for r in self.sensitivity_ratio_list):
             issues.append("sensitivity_ratio_list must contain ratios in (0, 1]")
         if self.sensitivity_batches < 1:
             issues.append("sensitivity_batches must be >= 1")
@@ -343,38 +357,31 @@ class ExperimentConfig:
     """
 
     # --- paths -------------------------------------------------------------
-    train_path: str = required_field(
-        "UNSW-NB15 training partition (175,341 records)", group="paths")
-    test_path: str = required_field(
-        "UNSW-NB15 testing partition (82,332 records)", group="paths")
-    output_dir: str = option(
-        "outputs/default", "directory for all result files", group="paths")
+    train_path: str = required_field("UNSW-NB15 training partition (175,341 records)", group="paths")
+    test_path: str = required_field("UNSW-NB15 testing partition (82,332 records)", group="paths")
+    output_dir: str = option("outputs/default", "directory for all result files", group="paths")
 
     # --- training protocol --------------------------------------------------
     training_budget_mode: str = option(
         "legacy",
         "legacy = each defense trained independently; matched_continuation = "
         "shared clean pre-training plus an equal continuation budget",
-        group="training")
+        group="training",
+    )
     batch_size: int = option(1024, "mini-batch size", group="training")
     baseline_epochs: int = option(10, "clean pre-training epochs", group="training")
-    adv_epochs: int = option(
-        8, "adversarial (continuation) epochs per defense", group="training")
+    adv_epochs: int = option(8, "adversarial (continuation) epochs per defense", group="training")
     learning_rate: float = option(1e-3, "Adam learning rate", group="training")
     weight_decay: float = option(1e-5, "Adam weight decay", group="training")
-    hidden_dims: tuple[int, ...] = option(
-        (128, 64, 32), "MLP hidden layer widths", group="training")
+    hidden_dims: tuple[int, ...] = option((128, 64, 32), "MLP hidden layer widths", group="training")
     dropout: float = option(0.15, "dropout probability", group="training")
 
     # --- adversarial training budget ----------------------------------------
     adv_epsilon: float = option(
-        0.06,
-        "L-inf perturbation budget used DURING TRAINING (differs from the evaluation budgets)",
-        group="attack")
+        0.06, "L-inf perturbation budget used DURING TRAINING (differs from the evaluation budgets)", group="attack"
+    )
     adv_alpha: float = option(0.015, "PGD step size used during training", group="attack")
-    adv_steps: int = option(
-        20, "PGD steps used during training", group="attack",
-        aliases=("--train-adv-steps",))
+    adv_steps: int = option(20, "PGD steps used during training", group="attack", aliases=("--train-adv-steps",))
 
     # --- attack optimisers ---------------------------------------------------
     cw_steps: int = option(30, "C&W L2 optimisation steps", group="attack")
@@ -387,104 +394,94 @@ class ExperimentConfig:
     eval_attack_rows: int = option(
         20000,
         "number of test rows used for the attack evaluation (stratified, shared by all defenses)",
-        group="evaluation")
+        group="evaluation",
+    )
     eval_subset_seed: int = option(
         DEFAULT_EVAL_SUBSET_SEED,
         "seed of the fixed stratified evaluation subset (shared by all defenses)",
-        group="evaluation")
+        group="evaluation",
+    )
     epsilon_list: tuple[float, ...] = option(
-        DEFAULT_EPSILON_LIST, "evaluation perturbation budgets", group="evaluation")
+        DEFAULT_EPSILON_LIST, "evaluation perturbation budgets", group="evaluation"
+    )
     eval_pgd_steps: int = option(
-        20, "PGD steps used at evaluation time (independent of the training steps)",
-        group="evaluation")
+        20, "PGD steps used at evaluation time (independent of the training steps)", group="evaluation"
+    )
     eval_pgd_alpha_ratio: float = option(
         0.05,
         "PGD evaluation step size as a fraction of epsilon "
         "(0.05 = eps/20, the value behind every reported result; 0.10 = eps/10)",
-        group="evaluation")
-    seeds: tuple[int, ...] = option(
-        DEFAULT_SEEDS, "random seeds; results are aggregated over them", group="evaluation")
+        group="evaluation",
+    )
+    seeds: tuple[int, ...] = option(DEFAULT_SEEDS, "random seeds; results are aggregated over them", group="evaluation")
     top_attack_categories: int = option(
-        6, "how many attack categories enter the worst-class objective", group="evaluation")
+        6, "how many attack categories enter the worst-class objective", group="evaluation"
+    )
 
     # --- auxiliary attack matrices -------------------------------------------
     transfer_attack_settings: tuple[AttackSetting, ...] = option(
-        (("fgsm", 0.05), ("pgd", 0.1)),
-        "attack:epsilon pairs used for the transferability matrix",
-        group="evaluation")
+        (("fgsm", 0.05), ("pgd", 0.1)), "attack:epsilon pairs used for the transferability matrix", group="evaluation"
+    )
     validity_attack_settings: tuple[AttackSetting, ...] = option(
-        (("fgsm", 0.05), ("pgd", 0.1)),
-        "attack:epsilon pairs used for the attack-validity check",
-        group="evaluation")
+        (("fgsm", 0.05), ("pgd", 0.1)), "attack:epsilon pairs used for the attack-validity check", group="evaluation"
+    )
     full_test_attack_settings: tuple[AttackSetting, ...] = option(
         DEFAULT_FULL_TEST_ATTACK_SETTINGS,
         "attack:epsilon pairs applied to the full test partition after training",
-        group="evaluation")
+        group="evaluation",
+    )
     full_test_attack_rows: int = option(
-        0, "rows of the test partition attacked at the end (0 = the whole partition)",
-        group="evaluation")
+        0, "rows of the test partition attacked at the end (0 = the whole partition)", group="evaluation"
+    )
 
     # --- per-category and ratio analysis --------------------------------------
     category_attack: str = option(
-        "pgd", "attack used for the per-category (worst-class) evaluation",
-        group="evaluation")
-    category_epsilon: float = option(
-        0.1, "epsilon for the per-category evaluation", group="evaluation")
-    ratio_attack: str = option(
-        "pgd", "attack used for the perturbation-ratio analysis", group="evaluation")
-    ratio_attack_epsilon: float = option(
-        0.1, "epsilon for the perturbation-ratio analysis", group="evaluation")
+        "pgd", "attack used for the per-category (worst-class) evaluation", group="evaluation"
+    )
+    category_epsilon: float = option(0.1, "epsilon for the per-category evaluation", group="evaluation")
+    ratio_attack: str = option("pgd", "attack used for the perturbation-ratio analysis", group="evaluation")
+    ratio_attack_epsilon: float = option(0.1, "epsilon for the perturbation-ratio analysis", group="evaluation")
 
     # --- adaptive attack evaluation (off by default: it is expensive) ---------
     adaptive_eval: bool = option(
-        False,
-        "also run the adaptive attack suite (restarts, gradient-free NES, complement attack)",
-        group="evaluation")
-    adaptive_epsilon: float = option(
-        0.10, "epsilon used by the adaptive attack suite", group="evaluation")
-    adaptive_steps: int = option(
-        40, "steps per restart in the adaptive attack suite", group="evaluation")
-    adaptive_restarts: int = option(
-        5, "random restarts in the adaptive attack suite", group="evaluation")
+        False, "also run the adaptive attack suite (restarts, gradient-free NES, complement attack)", group="evaluation"
+    )
+    adaptive_epsilon: float = option(0.10, "epsilon used by the adaptive attack suite", group="evaluation")
+    adaptive_steps: int = option(40, "steps per restart in the adaptive attack suite", group="evaluation")
+    adaptive_restarts: int = option(5, "random restarts in the adaptive attack suite", group="evaluation")
 
     # --- defense-specific coefficients ----------------------------------------
     trades_beta: float = option(6.0, "TRADES trade-off coefficient", group="methods")
     free_at_replay: int = option(4, "Free AT replay multiplier m", group="methods")
     class_aware_minority_weight: float = option(
-        3.0, "extra loss weight for minority attack categories", group="methods",
-        aliases=("--class-aware-weight",))
+        3.0, "extra loss weight for minority attack categories", group="methods", aliases=("--class-aware-weight",)
+    )
     reference_models: tuple[str, ...] = option(
-        REFERENCE_MODEL_NAMES, "non-neural reference classifiers (log_reg, hist_gbdt)",
-        group="methods")
+        REFERENCE_MODEL_NAMES, "non-neural reference classifiers (log_reg, hist_gbdt)", group="methods"
+    )
 
     # --- optional extra defense methods (off by default) ----------------------
     extra_methods: tuple[str, ...] = option(
-        (),
-        "optional additional defenses to train as well: progressive, sa_trades, dst_sa_trades",
-        group="methods")
+        (), "optional additional defenses to train as well: progressive, sa_trades, dst_sa_trades", group="methods"
+    )
     progressive_ratios: tuple[float, ...] = option(
-        (0.20, 0.30, 0.45, 0.60), "mask ratios of the progressive class-aware schedule",
-        group="methods")
-    sa_trades_gamma: float = option(
-        1.0, "sensitivity-weighting exponent of SA-TRADES", group="methods")
-    dst_update_interval: int = option(
-        2, "epochs between sensitivity re-estimates in DST-SA-TRADES", group="methods")
-    dst_ema_alpha: float = option(
-        0.7, "EMA smoothing factor for the DST sensitivity estimate", group="methods")
+        (0.20, 0.30, 0.45, 0.60), "mask ratios of the progressive class-aware schedule", group="methods"
+    )
+    sa_trades_gamma: float = option(1.0, "sensitivity-weighting exponent of SA-TRADES", group="methods")
+    dst_update_interval: int = option(2, "epochs between sensitivity re-estimates in DST-SA-TRADES", group="methods")
+    dst_ema_alpha: float = option(0.7, "EMA smoothing factor for the DST sensitivity estimate", group="methods")
 
     # --- sensitivity analysis and masks --------------------------------------
-    sensitivity_top_ratio: float = option(
-        0.3, "fraction of features kept by the sensitivity mask", group="sensitivity")
+    sensitivity_top_ratio: float = option(0.3, "fraction of features kept by the sensitivity mask", group="sensitivity")
     sensitivity_ratio_list: tuple[float, ...] = option(
-        (0.2, 0.3, 0.4), "mask ratios swept during the sensitivity analysis",
-        group="sensitivity")
-    sensitivity_batches: int = option(
-        16, "mini-batches used to estimate feature sensitivity", group="sensitivity")
+        (0.2, 0.3, 0.4), "mask ratios swept during the sensitivity analysis", group="sensitivity"
+    )
+    sensitivity_batches: int = option(16, "mini-batches used to estimate feature sensitivity", group="sensitivity")
 
     # --- runtime ----------------------------------------------------------------
     device: str = option(
-        "auto", "torch device: auto (CUDA if available, else MPS/CPU), cpu, cuda, cuda:N or mps",
-        group="runtime")
+        "auto", "torch device: auto (CUDA if available, else MPS/CPU), cpu, cuda, cuda:N or mps", group="runtime"
+    )
 
     # ------------------------------------------------------------------ #
     # normalisation, grouped views and validation
@@ -619,13 +616,11 @@ def parse_tuple_value(raw: str, kind: str) -> tuple:
         for item in items:
             key, sep, value = item.partition(":")
             if not sep or not key.strip() or not value.strip():
-                raise argparse.ArgumentTypeError(
-                    f"expected key:value pairs such as 'fgsm:0.05,pgd:0.10', got {item!r}")
+                raise argparse.ArgumentTypeError(f"expected key:value pairs such as 'fgsm:0.05,pgd:0.10', got {item!r}")
             try:
                 pairs.append((key.strip(), float(value)))
             except ValueError:
-                raise argparse.ArgumentTypeError(
-                    f"{value!r} is not a number (in {item!r})") from None
+                raise argparse.ArgumentTypeError(f"{value!r} is not a number (in {item!r})") from None
         return tuple(pairs)
 
     converters = {"int": int, "float": float, "str": str}
@@ -634,12 +629,12 @@ def parse_tuple_value(raw: str, kind: str) -> tuple:
     try:
         return tuple(converters[kind](item) for item in items)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            f"cannot parse {raw!r} as comma-separated {kind} values ({exc})") from None
+        raise argparse.ArgumentTypeError(f"cannot parse {raw!r} as comma-separated {kind} values ({exc})") from None
 
 
-def add_config_arguments(parser: argparse.ArgumentParser, skip: tuple[str, ...] = (),
-                         defaults: dict[str, object] | None = None) -> None:
+def add_config_arguments(
+    parser: argparse.ArgumentParser, skip: tuple[str, ...] = (), defaults: dict[str, object] | None = None
+) -> None:
     """Attach one flag per ExperimentConfig field, generated from the dataclass."""
     provided = defaults or {}
     for name, f in ExperimentConfig.__dataclass_fields__.items():
@@ -657,21 +652,29 @@ def add_config_arguments(parser: argparse.ArgumentParser, skip: tuple[str, ...] 
             kind = tuple_value_kind(declared)
             example = format_tuple_default(default)
             parser.add_argument(
-                flag, *aliases, default=default, metavar="LIST",
+                flag,
+                *aliases,
+                default=default,
+                metavar="LIST",
                 type=lambda raw, kind=kind: parse_tuple_value(raw, kind),
-                help=f"{help_text}  [comma-separated; default: {example}]")
+                help=f"{help_text}  [comma-separated; default: {example}]",
+            )
         elif isinstance(declared, bool):
-            parser.add_argument(flag, *aliases, default=default, type=parse_bool, nargs="?",
-                                const=True, help=f"{help_text}  [default: {default}]")
+            parser.add_argument(
+                flag,
+                *aliases,
+                default=default,
+                type=parse_bool,
+                nargs="?",
+                const=True,
+                help=f"{help_text}  [default: {default}]",
+            )
         elif isinstance(declared, int):
-            parser.add_argument(flag, *aliases, default=default, type=int,
-                                help=f"{help_text}  [default: {default}]")
+            parser.add_argument(flag, *aliases, default=default, type=int, help=f"{help_text}  [default: {default}]")
         elif isinstance(declared, float):
-            parser.add_argument(flag, *aliases, default=default, type=float,
-                                help=f"{help_text}  [default: {default}]")
+            parser.add_argument(flag, *aliases, default=default, type=float, help=f"{help_text}  [default: {default}]")
         else:
-            parser.add_argument(flag, *aliases, default=default, type=str,
-                                help=f"{help_text}  [default: {default}]")
+            parser.add_argument(flag, *aliases, default=default, type=str, help=f"{help_text}  [default: {default}]")
 
 
 def config_from_args(args: argparse.Namespace, **overrides: object) -> ExperimentConfig:
@@ -697,10 +700,12 @@ def config_from_args(args: argparse.Namespace, **overrides: object) -> Experimen
         raise SystemExit(f"error: {exc}") from None
 
 
-def build_parser(description: str | None = None,
-                 skip: tuple[str, ...] = (),
-                 defaults: dict[str, object] | None = None,
-                 require_paths: bool = True) -> argparse.ArgumentParser:
+def build_parser(
+    description: str | None = None,
+    skip: tuple[str, ...] = (),
+    defaults: dict[str, object] | None = None,
+    require_paths: bool = True,
+) -> argparse.ArgumentParser:
     """Standard parser: dataset paths plus every config field.
 
     defaults       per-script overrides for individual config fields, so each
@@ -711,21 +716,26 @@ def build_parser(description: str | None = None,
     """
     d = defaults or {}
     parser = argparse.ArgumentParser(
-        description=description
-        or "Adversarial robustness experiments for UNSW-NB15 intrusion detection.",
+        description=description or "Adversarial robustness experiments for UNSW-NB15 intrusion detection.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Every ExperimentConfig field can be set from the command line; see above.")
-    parser.add_argument("--train-path", required=require_paths,
-                        default=None if require_paths else d.get(
-                            "train_path", str(DEFAULT_DATA_DIR / "train.csv")),
-                        help=field_help("train_path"))
-    parser.add_argument("--test-path", required=require_paths,
-                        default=None if require_paths else d.get(
-                            "test_path", str(DEFAULT_DATA_DIR / "test.csv")),
-                        help=field_help("test_path"))
+        epilog="Every ExperimentConfig field can be set from the command line; see above.",
+    )
+    parser.add_argument(
+        "--train-path",
+        required=require_paths,
+        default=None if require_paths else d.get("train_path", str(DEFAULT_DATA_DIR / "train.csv")),
+        help=field_help("train_path"),
+    )
+    parser.add_argument(
+        "--test-path",
+        required=require_paths,
+        default=None if require_paths else d.get("test_path", str(DEFAULT_DATA_DIR / "test.csv")),
+        help=field_help("test_path"),
+    )
     add_config_arguments(parser, skip=("train_path", "test_path") + tuple(skip), defaults=d)
-    parser.add_argument("--print-config", action="store_true",
-                        help="print the effective configuration as grouped JSON and exit")
+    parser.add_argument(
+        "--print-config", action="store_true", help="print the effective configuration as grouped JSON and exit"
+    )
     return parser
 
 
@@ -743,3 +753,65 @@ def parse_args(argv: list[str] | None = None) -> ExperimentConfig:
     if args.print_config:
         emit_config(config)
     return config
+
+
+def _default_text(f: Any) -> str:
+    """Render one field default the way it is typed on the command line."""
+    if f.default is not MISSING:
+        value = f.default
+    elif f.default_factory is not MISSING:
+        value = f.default_factory()
+    else:
+        return "<required>"
+    if isinstance(value, tuple):
+        return ",".join(str(item) for item in value)
+    return str(value)
+
+
+def default_rows() -> list[tuple[str, str, str, str]]:
+    """``(group, flag, default, help)`` for every field, in :data:`GROUP_ORDER`."""
+    rows: list[tuple[str, str, str, str]] = []
+    for group in GROUP_ORDER:
+        for name, f in ExperimentConfig.__dataclass_fields__.items():
+            if f.metadata.get("group") != group:
+                continue
+            rows.append((group, "--" + name.replace("_", "-"), _default_text(f), field_help(name)))
+    return rows
+
+
+def format_default_config() -> str:
+    """Readable listing of every flag with its default and help text.
+
+    Used by ``python -m ids_defense_selection.config``; for the *effective*
+    values of one run use ``--print-config`` on any runner instead.
+    """
+    lines = ["ExperimentConfig defaults (group order, one flag per field)", ""]
+    current_group = None
+    for group, flag, default, help_text in default_rows():
+        if group != current_group:
+            current_group = group
+            lines.append(f"[{group}]")
+        lines.append(f"  {flag:<32} = {default}")
+        if help_text:
+            lines.append(f"      {help_text}")
+    return "\n".join(lines)
+
+
+def default_instance() -> ExperimentConfig:
+    """A valid ``ExperimentConfig`` pointing at this repository's own dataset.
+
+    ``train_path`` / ``test_path`` have no dataclass default (the runners fill
+    them in), so a bare ``ExperimentConfig()`` raises; this helper is the
+    documented way to get a ready-to-inspect instance.
+    """
+    return ExperimentConfig(
+        train_path=str(DEFAULT_DATA_DIR / "train.csv"),
+        test_path=str(DEFAULT_DATA_DIR / "test.csv"),
+    )
+
+
+if __name__ == "__main__":
+    print(format_default_config())
+    print()
+    print("Resolved defaults for this repository (same shape as --print-config):")
+    print(json.dumps(default_instance().grouped(), indent=2, default=str, ensure_ascii=False))

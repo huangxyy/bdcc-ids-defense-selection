@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Run the FT-Transformer backbone experiment.
 
-    uv run python code/run_ft_transformer.py --device cuda
+    uv run python scripts/run_ft_transformer.py --device cuda
 
 The FT-Transformer is the slowest backbone, so its default training attack uses
 7 PGD steps (``--adv-steps``, alias ``--train-adv-steps``) while every evaluation
@@ -9,6 +9,8 @@ attack still uses the full 20 steps (``--eval-pgd-steps``).  The two budgets are
 recorded separately in run_summary.json.
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from pathlib import Path
 

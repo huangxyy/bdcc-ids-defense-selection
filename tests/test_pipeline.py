@@ -6,6 +6,7 @@ the evaluation loop and the output writer.
 """
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -150,7 +151,6 @@ def test_training_evaluation_and_outputs(synthetic_dataset: dict, tmp_path: Path
     assert "standard" in set(aggregated["mean_results"]["model"])
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")  # scipy's Wilcoxon normal approx on n=3
 def test_significance_tests_compare_defense_pairs() -> None:
     rows = []
     # the per-seed difference varies so the paired tests are well conditioned
@@ -163,3 +163,20 @@ def test_significance_tests_compare_defense_pairs() -> None:
     significance = compute_significance_tests(pd.DataFrame(rows), epsilon_list=(0.05,))
     assert not significance.empty
     assert set(significance["comparison"]) == {"constrained_adv_vs_standard"}
+
+
+def test_significance_tests_survive_degenerate_samples() -> None:
+    """Two seeds with identical defences must not warn or crash the run."""
+    rows = [
+        {"seed": seed, "model": model, "attack": "clean", "epsilon": 0.0,
+         "f1": 0.8, "attack_success_rate": 0.0}
+        for seed in (1, 2)
+        for model in ("constrained_adv", "standard")
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        significance = compute_significance_tests(pd.DataFrame(rows), epsilon_list=(0.05,))
+    assert not significance.empty
+    clean = significance[significance["metric"] == "f1"]
+    assert set(clean["n_seeds"]) == {2}
+    assert set(clean["note"]) == {"identical paired samples (no effect to test)"}

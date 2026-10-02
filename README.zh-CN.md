@@ -27,13 +27,16 @@ cd bdcc-ids-defense-selection
 uv sync
 
 # 1. 数据集已随仓库提供（见下文"数据集"），先校验：
-uv run python code/prepare_data.py
+uv run python scripts/prepare_data.py
 
 # 2. 几秒钟：确认环境与数据可用
-uv run python code/smoke_test.py
+uv run python scripts/smoke_test.py
 
 # 3. 完整复现
-uv run python run_experiments.py
+uv run python scripts/run_experiments.py
+
+# 4. 端到端验证当前检出（数据、lint、测试、冒烟、dry-run）
+make verify
 ```
 
 `uv run` 会在项目环境中执行命令，无需手动激活环境；下文所有 `python ...` 示例都应以同样方式运行
@@ -41,7 +44,11 @@ uv run python run_experiments.py
 
 所有路径都相对仓库根目录解析，因此下文的每条命令都可以在任意工作目录下执行。
 
-运行 `uv run python run_experiments.py --dry-run` 可以只查看将要执行的命令而不真正运行。
+运行 `uv run python scripts/run_experiments.py --dry-run` 可以只查看将要执行的命令而不真正运行。
+
+`make verify` 是统一的验证入口；`make quick` 只跑快检（数据 + lint + 测试），约十秒。
+验证分层、论文内容与命令的对应表、修订版验收标准见 [docs/verification.md](docs/verification.md)，
+目录约定见 [docs/structure.md](docs/structure.md)。
 
 ---
 
@@ -55,8 +62,8 @@ uv，不需要 root，也不用自己配 CUDA 工具链：
 一键脚本：
 
 ```bash
-bash code/setup_server.sh          # uv sync（走镜像，CPython 3.12 + 锁定依赖）
-bash code/setup_server.sh --pip    # 复用已有的 conda torch，只 pip 安装其余依赖
+bash scripts/setup_server.sh          # uv sync（走镜像，CPython 3.12 + 锁定依赖）
+bash scripts/setup_server.sh --pip    # 复用已有的 conda torch，只 pip 安装其余依赖
 ```
 
 ```bash
@@ -65,7 +72,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 cd bdcc-ids-defense-selection
 uv sync                       # 自动下载 CPython 3.12 与锁定的 CUDA 版 torch
-uv run python code/check_devices.py
+uv run python scripts/check_devices.py
 ```
 
 `check_devices.py` 会打印 torch 的 CUDA 构建、每块可见 GPU（型号/显存/算力）以及 `auto`
@@ -79,7 +86,7 @@ uv run python code/check_devices.py
 # 例：CUDA 13.0 版本（RTX 50 系 / Blackwell 需要较新的 CUDA 构建）
 uv pip install --python .venv/bin/python --reinstall torch \
     --index-url https://download.pytorch.org/whl/cu130
-uv run python code/check_devices.py     # 期望 "available    : True"
+uv run python scripts/check_devices.py     # 期望 "available    : True"
 ```
 
 其它版本（`cu128`、`cu126`、`cu118` 等）见 <https://download.pytorch.org/whl/>。
@@ -106,11 +113,11 @@ data/test.csv      82,332 条    <- 官方 UNSW_NB15_testing-set.csv
 ```
 
 这是**官方的划分方向**：较大的划分用于训练。一个常见错误是把下载的两个文件直接命名为
-train/test 而没有确认哪个是哪个，这会悄悄把划分方向反过来。`code/prepare_data.py`
+train/test 而没有确认哪个是哪个，这会悄悄把划分方向反过来。`scripts/prepare_data.py`
 能够检测出这种情况，并用 `--fix-swap` 修复：
 
 ```bash
-uv run python code/prepare_data.py --fix-swap
+uv run python scripts/prepare_data.py --fix-swap
 ```
 
 CIC-IDS2017 **不在仓库中**（可选，只有跨数据集脚本需要）；详见
@@ -125,38 +132,48 @@ bdcc-ids-defense-selection/
 ├── pyproject.toml                            # 项目元数据与依赖（uv）
 ├── uv.lock                                   # 完整锁定的依赖版本
 ├── .python-version                           # uv 使用的解释器版本
-├── run_experiments.py                        # 一条命令复现三个骨干网络
-├── code/
-│   ├── ids_defense_selection/                # 库（所有可导入的实现）
-│   │   ├── config.py                         # ExperimentConfig 与自动生成的 CLI
-│   │   ├── data.py                           # 特征工程、数据加载、随机种子
-│   │   ├── attacks.py                        # FGSM / PGD / C&W / APGD 与约束
-│   │   ├── defenses.py                       # 六种防御、可选扩展、敏感度掩码
-│   │   ├── evaluation.py                     # 指标、预测、共享评测循环
-│   │   ├── reporting.py                      # 聚合、显著性检验、图表
-│   │   ├── backbones.py                      # MLP / 1D-CNN / FT-Transformer 模型
-│   │   ├── experiment.py                     # MLP 端到端流程
-│   │   ├── phi4.py                           # 最差类别召回评测
-│   │   ├── adaptive.py                       # 自适应攻击套件
-│   │   └── style.py                          # 共享 matplotlib 样式与配色
-│   ├── prepare_data.py                       # 校验 / 修复数据集目录
-│   ├── smoke_test.py                         # 快速端到端自检
-│   ├── check_devices.py                      # CPU / CUDA / MPS 可用性报告
-│   ├── setup_server.sh                       # 服务器一键安装（自动走国内镜像）
+├── Makefile                                  # make verify / test / lint / smoke / dry-run
+├── docs/
+│   ├── structure.md                          # 仓库布局与约定
+│   └── verification.md                       # 验证层级、命令与产物对应表
+├── src/
+│   └── ids_defense_selection/                # 库（所有可导入的实现）
+│       ├── config.py                         # ExperimentConfig 与自动生成的 CLI
+│       ├── data.py                           # 特征工程、数据加载、随机种子
+│       ├── attacks.py                        # FGSM / PGD / C&W / APGD 与约束
+│       ├── defenses.py                       # 六种防御、可选扩展、敏感度掩码
+│       ├── evaluation.py                     # 指标、预测、共享评测循环
+│       ├── reporting.py                      # 聚合、显著性检验、图表
+│       ├── selection.py                      # 帕累托过滤 + 偏好加权选择
+│       ├── backbones.py                      # MLP / 1D-CNN / FT-Transformer 模型
+│       ├── experiment.py                     # MLP 端到端流程
+│       ├── phi4.py                           # 最差类别召回评测
+│       ├── adaptive.py                       # 自适应攻击套件
+│       └── style.py                          # 共享 matplotlib 样式与配色
+├── scripts/                                  # 入口脚本（CLI 与实验编排）
+│   ├── _bootstrap.py                         # 把 src/ 加入 sys.path，保证脚本随处可跑
+│   ├── run_experiments.py                    # 一条命令复现三个骨干网络
 │   ├── run_mlp.py                            # MLP 实验
 │   ├── run_cnn1d.py                          # 1D-CNN 实验
 │   ├── run_ft_transformer.py                 # FT-Transformer 实验
 │   ├── evaluate_phi4_cnn.py                  # phi4（最差类别召回），1D-CNN
 │   ├── evaluate_phi4_ft.py                   # phi4（最差类别召回），FT-Transformer
-│   ├── pareto_selection.py                   # 帕累托过滤 + 偏好加权选择
+│   ├── pareto_selection.py                   # ids_defense_selection.selection 的 CLI
 │   ├── evaluate_cross_backbone_transfer.py   # 迁移攻击矩阵
 │   ├── run_cicids2017.py                     # CIC-IDS2017 跨数据集运行
 │   ├── run_cicids2017_source_disjoint.py     # 源域不重叠的 CIC-IDS2017 变体
 │   ├── sweep_hyperparameters.py              # 超参数敏感性
 │   ├── analyze_extended.py                   # epsilon 扫描、ROC、梯度遮蔽
+│   ├── prepare_data.py                       # 校验 / 修复数据集目录
+│   ├── smoke_test.py                         # 快速端到端自检
+│   ├── check_devices.py                      # CPU / CUDA / MPS 可用性报告
+│   ├── verify.py                             # 一条命令完成验证（make verify）
+│   ├── check_outputs.py                      # 校验已完成的 outputs/ 产物
+│   ├── setup_server.sh                       # 服务器一键安装（自动走国内镜像）
 │   └── make_figures_matlab.m                 # MATLAB：图 2（帕累托）及相关面板
-├── data/            # 数据集放置于此（不入版本库）
-└── outputs/         # 实验输出（不入版本库）
+├── tests/                                    # 单元、集成与结构测试
+├── data/                                     # UNSW-NB15 官方划分（随仓库提供）
+└── outputs/                                  # 实验输出（不入版本库；见 outputs/README.md）
 ```
 
 ### 各脚本与论文结果的对应关系
@@ -170,7 +187,8 @@ bdcc-ids-defense-selection/
 
 其余脚本（`run_cicids2017*.py`、`evaluate_cross_backbone_transfer.py`、
 `sweep_hyperparameters.py`、`analyze_extended.py`）实现的是**不属于**论文表格的分析，保留在此是为了
-完整性与后续研究。自适应攻击套件位于 `code/ids_defense_selection/adaptive.py`，由 `smoke_test.py` 使用。
+完整性与后续研究。自适应攻击套件位于 `src/ids_defense_selection/adaptive.py`，加上 `--adaptive-eval`
+后会在评测流程（`evaluate_defenses`）里自动运行，`smoke_test.py` 也会跑它。
 
 ---
 
@@ -184,17 +202,17 @@ CUDA GPU，其次 Apple MPS，最后回退到 CPU；在没有 GPU 的机器上�
 记录在 `run_summary.json` 中。
 
 ```bash
-uv run python code/check_devices.py                  # 查看 CPU / CUDA / MPS
-uv run python run_experiments.py                     # 自动选择设备
-uv run python code/run_mlp.py --device cpu           # 固定用 CPU
-uv run python code/run_mlp.py --device cuda:1        # 固定用某块 GPU
+uv run python scripts/check_devices.py                  # 查看 CPU / CUDA / MPS
+uv run python scripts/run_experiments.py                     # 自动选择设备
+uv run python scripts/run_mlp.py --device cpu           # 固定用 CPU
+uv run python scripts/run_mlp.py --device cuda:1        # 固定用某块 GPU
 ```
 
 ### 完整流程
 
 ```bash
-uv run python run_experiments.py --device cuda                     # MLP、1D-CNN、FT-Transformer
-uv run python run_experiments.py --backbones mlp,cnn --device cuda # 只跑子集
+uv run python scripts/run_experiments.py --device cuda                     # MLP、1D-CNN、FT-Transformer
+uv run python scripts/run_experiments.py --backbones mlp,cnn --device cuda # 只跑子集
 ```
 
 各个骨干网络**故意串行运行**：并行运行会让它们争抢 GPU，从而污染用于目标 phi3 的训练成本测量。
@@ -223,8 +241,8 @@ risk_profile_4d.csv       四维画像与帕累托标记
 ### 最差类别召回（phi4），五个随机种子
 
 ```bash
-uv run python code/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn
-uv run python code/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft
+uv run python scripts/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn
+uv run python scripts/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft
 ```
 
 两个脚本默认使用论文的五个随机种子；单种子估计可传 `--seeds 42`，子集可传 `--seeds 7,13`。
@@ -234,14 +252,14 @@ FT-Transformer 训练时使用 `--adv-steps 7`、评测时使用 `--eval-pgd-ste
 ### 帕累托过滤与选择
 
 ```bash
-uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
+uv run python scripts/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 ```
 
 决策步骤现在会考虑种子间的波动，并支持设置最低标准：
 
 ```bash
 # 不确定性感知帕累托（均值 ± 1 倍标准差），并淘汰低于门槛的候选
-uv run python code/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
+uv run python scripts/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
 ```
 
 `risk_profile_4d.csv` 会带上各目标的标准差，以及"统计判定"和"点估计判定"两种帕累托标记；
@@ -311,8 +329,8 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 而代码里原有的扁平访问（`config.batch_size`）保持不变。
 
 ```bash
-uv run python code/run_cnn1d.py --help              # 查看完整参数列表与默认值
-uv run python code/run_mlp.py --train-path data/train.csv --test-path data/test.csv --print-config
+uv run python scripts/run_cnn1d.py --help              # 查看完整参数列表与默认值
+uv run python scripts/run_mlp.py --train-path data/train.csv --test-path data/test.csv --print-config
 ```
 
 复杂类型用逗号分隔的字符串解析：
@@ -328,21 +346,21 @@ uv run python code/run_mlp.py --train-path data/train.csv --test-path data/test.
 未传入的字段保持 dataclass 默认值；`--print-config` 会在开始任何工作之前以 JSON 打印生效配置：
 
 ```bash
-uv run python code/run_ft_transformer.py --seeds 1,2,3 --adv-epsilon 0.09 --print-config
+uv run python scripts/run_ft_transformer.py --seeds 1,2,3 --adv-epsilon 0.09 --print-config
 ```
 
 一些有代表性的用法：
 
 ```bash
 # 换一种 MLP 结构，并使用不同的评测预算列表
-uv run python code/run_mlp.py --train-path data/train.csv --test-path data/test.csv \
+uv run python scripts/run_mlp.py --train-path data/train.csv --test-path data/test.csv \
     --hidden-dims 256,128,64 --dropout 0.3 --epsilon-list 0.02,0.05,0.10
 
 # 用三个种子代替五个
-uv run python code/run_cnn1d.py --seeds 7,42,100
+uv run python scripts/run_cnn1d.py --seeds 7,42,100
 
 # 论文方法部分写到的 eps/10 的 PGD 步长
-uv run python code/run_mlp.py --eval-pgd-alpha-ratio 0.10
+uv run python scripts/run_mlp.py --eval-pgd-alpha-ratio 0.10
 ```
 
 ### 可选的额外防御方法
@@ -352,7 +370,7 @@ Constrained AT、SA-TRADES 和 DST-SA-TRADES。它们被完整保留，以便实
 请求时才会训练：
 
 ```bash
-uv run python code/run_mlp.py --extra-methods progressive,sa_trades,dst_sa_trades
+uv run python scripts/run_mlp.py --extra-methods progressive,sa_trades,dst_sa_trades
 ```
 
 默认（空）设置下，代码只训练论文报告的六种防御，不会训练其它任何东西。启用后，每种额外方法会加入与
@@ -377,16 +395,20 @@ os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 ## 开发
 
-库代码位于 `code/ids_defense_selection/`，`code/` 下的脚本只是导入该库的薄入口。安装开发工具并在仓库
-根目录运行检查：
+库代码位于 `src/ids_defense_selection/`，`scripts/` 下的脚本只是薄入口。凡是要被单元测试的逻辑都放进
+库里（例如帕累托决策逻辑是 `ids_defense_selection/selection.py`，`scripts/pareto_selection.py` 只是
+它的 CLI）。安装开发工具并在仓库根目录运行检查：
 
 ```bash
 uv sync --group dev
+make quick             # 数据校验 + lint + 测试（约十秒）
+make verify            # 再加真实数据冒烟测试与 dry-run
 uv run pytest          # 合成数据上的端到端流程测试（CPU，数秒）
 uv run ruff check      # 静态检查（含未定义名称）
 ```
 
 测试会构造一个小型、形如 UNSW-NB15 的合成数据集，因此既不需要真实数据，也不需要 GPU。
+`tests/test_structure.py` 会强制检查目录约定，新增脚本若不能在任意工作目录运行会被测试直接拦下。
 
 ---
 

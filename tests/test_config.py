@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import sys
 from pathlib import Path
 from dataclasses import fields
 
@@ -22,12 +24,16 @@ from ids_defense_selection.config import (
     TrainingConfig,
     build_parser,
     config_from_args,
+    default_instance,
+    default_rows,
     emit_config,
     field_group,
     field_help,
+    format_default_config,
     parse_tuple_value,
 )
 from ids_defense_selection.paths import BACKBONE_OUTPUT_SUBDIRS, default_output_dir, resolve_path
+from ids_defense_selection.paths import PROJECT_ROOT
 
 
 def test_parse_tuple_value_scalar_kinds() -> None:
@@ -260,3 +266,47 @@ def test_default_dataset_paths_are_repo_root_based() -> None:
     assert Path(args.test_path).is_absolute()
     assert Path(args.train_path).name == "train.csv"
     assert Path(args.test_path).name == "test.csv"
+
+
+def test_default_config_report_covers_every_flag() -> None:
+    """`python -m ids_defense_selection.config` must list every flag exactly once."""
+    rows = default_rows()
+    flags = [flag for _, flag, _, _ in rows]
+    expected = {"--" + name.replace("_", "-") for name in ExperimentConfig.__dataclass_fields__}
+    assert set(flags) == expected
+    assert len(flags) == len(set(flags))
+    assert [group for group, _, _, _ in rows] == sorted(
+        (group for group, _, _, _ in rows), key=GROUP_ORDER.index)
+
+    report = format_default_config()
+    assert "MISSING" not in report
+    assert "--train-path" in report and "<required>" in report
+    for _, flag, _, help_text in rows:
+        assert flag in report
+        assert help_text in report
+    report = format_default_config()
+    assert "MISSING" not in report
+    assert "--train-path" in report and "<required>" in report
+    for _, flag, _, help_text in rows:
+        assert flag in report
+        assert help_text in report
+
+
+def test_config_module_runs_as_a_plain_script(tmp_path: Path) -> None:
+    """`python src/ids_defense_selection/config.py` must not break on relative imports."""
+    script = PROJECT_ROOT / "src" / "ids_defense_selection" / "config.py"
+    completed = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True, text=True, cwd=tmp_path, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "ExperimentConfig defaults" in completed.stdout
+    assert "Resolved defaults for this repository" in completed.stdout
+    assert "attempted relative import" not in completed.stderr
+
+
+def test_default_instance_points_at_the_repository_dataset() -> None:
+    config = default_instance()
+    assert Path(config.train_path) == PROJECT_ROOT / "data" / "train.csv"
+    assert Path(config.test_path) == PROJECT_ROOT / "data" / "test.csv"
+    assert config.grouped()["runtime"]["device"] == "auto"

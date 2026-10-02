@@ -25,7 +25,7 @@ data/test.csv      82,332 条    <- 官方 UNSW_NB15_testing-set.csv
 ### 校验目录
 
 ```bash
-uv run python code/prepare_data.py
+uv run python scripts/prepare_data.py
 ```
 
 该命令会统计每个文件的记录数并与官方划分大小比较，同时检查必需的列是否存在。
@@ -40,14 +40,14 @@ uv run python code/prepare_data.py
 `prepare_data.py` 能检测出这种情况并修复：
 
 ```bash
-uv run python code/prepare_data.py --fix-swap
+uv run python scripts/prepare_data.py --fix-swap
 ```
 
 交换之后，`train.csv` 有 175,341 条记录，`test.csv` 有 82,332 条——即官方方向。
 
 ## CIC-IDS2017（可选）
 
-**不随仓库提供**；只有 `code/run_cicids2017.py` 和 `code/run_cicids2017_source_disjoint.py` 需要。
+**不随仓库提供**；只有 `scripts/run_cicids2017.py` 和 `scripts/run_cicids2017_source_disjoint.py` 需要。
 
 来源：<https://www.unb.ca/cic/datasets/ids-2017.html>
 

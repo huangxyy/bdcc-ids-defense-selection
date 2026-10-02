@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -146,6 +147,27 @@ DEFAULT_COMPARISONS: tuple[tuple[str, str], ...] = (
 )
 
 
+def run_paired_test(
+    test_fn,
+    sample_a: np.ndarray,
+    sample_b: np.ndarray,
+) -> tuple[float, float]:
+    """Run one paired test and degrade to NaN instead of aborting the run.
+
+    Small seed counts produce degenerate samples (identical paired values, zero
+    variance), where scipy's normal approximation divides by a zero standard
+    error.  That emits a ``RuntimeWarning`` while still returning a usable
+    p-value, so the warning is muted here and genuine failures become NaN.
+    """
+    with warnings.catch_warnings(), np.errstate(all="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
+        try:
+            statistic, pvalue = test_fn(sample_a, sample_b)
+        except Exception:  # noqa: BLE001 - degenerate samples must not abort the run
+            return float("nan"), float("nan")
+    return float(statistic), float(pvalue)
+
+
 def compute_significance_tests(
     results_df: pd.DataFrame,
     epsilon_list: tuple[float, ...],
@@ -172,23 +194,25 @@ def compute_significance_tests(
                     b = subset[subset["model"] == model_b].sort_values("seed")[metric].to_numpy()
                     if len(a) < 2 or len(b) < 2 or len(a) != len(b):
                         continue
-                    try:
-                        t_statistic, t_pvalue = scipy_stats.ttest_rel(a, b)
-                    except Exception:  # noqa: BLE001 - degenerate samples must not abort the run
-                        t_statistic, t_pvalue = float("nan"), float("nan")
-                    try:
-                        wilcoxon_statistic, wilcoxon_pvalue = scipy_stats.wilcoxon(a, b)
-                    except Exception:  # noqa: BLE001
-                        wilcoxon_statistic, wilcoxon_pvalue = float("nan"), float("nan")
+                    t_statistic, t_pvalue = run_paired_test(scipy_stats.ttest_rel, a, b)
+                    wilcoxon_statistic, wilcoxon_pvalue = run_paired_test(scipy_stats.wilcoxon, a, b)
+                    if np.allclose(a - b, 0.0):
+                        note = "identical paired samples (no effect to test)"
+                    elif np.isnan(t_pvalue) and np.isnan(wilcoxon_pvalue):
+                        note = "test statistics unavailable"
+                    else:
+                        note = ""
                     rows.append({
                         "comparison": f"{model_a}_vs_{model_b}",
                         "attack": attack,
                         "epsilon": epsilon,
                         "metric": metric,
+                        "n_seeds": int(len(a)),
                         "t_statistic": t_statistic,
                         "t_pvalue": t_pvalue,
                         "wilcoxon_statistic": wilcoxon_statistic,
                         "wilcoxon_pvalue": wilcoxon_pvalue,
+                        "note": note,
                     })
     return pd.DataFrame(rows)
 

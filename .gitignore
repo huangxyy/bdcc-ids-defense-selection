@@ -5,8 +5,10 @@ data/*.csv
 !data/test.csv
 data/cicids2017/
 
-# Experiment outputs
-outputs/
+# Experiment outputs: everything is regenerated; only the layout README is
+# tracked so a fresh clone documents where artefacts will appear.
+outputs/*
+!outputs/README.md
 
 # Python
 __pycache__/

@@ -2,13 +2,13 @@
 # One-shot environment setup for a GPU server (downloads default to the
 # Tsinghua PyPI mirror, which is fast from mainland China).
 #
-#   bash code/setup_server.sh          # uv-managed environment (recommended)
-#   bash code/setup_server.sh --pip    # install the non-torch deps into the
+#   bash scripts/setup_server.sh          # uv-managed environment (recommended)
+#   bash scripts/setup_server.sh --pip    # install the non-torch deps into the
 #                                      # currently active Python (e.g. a conda
 #                                      # env that already ships a working torch)
 #
 # Override the mirror (e.g. outside China):
-#   UV_DEFAULT_INDEX=https://pypi.org/simple bash code/setup_server.sh
+#   UV_DEFAULT_INDEX=https://pypi.org/simple bash scripts/setup_server.sh
 set -euo pipefail
 
 MIRROR="${UV_DEFAULT_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}"
@@ -36,4 +36,4 @@ else
 fi
 
 echo "[setup] done."
-echo "[setup] verify the GPU with:  python code/check_devices.py"
+echo "[setup] verify the GPU with:  python scripts/check_devices.py"

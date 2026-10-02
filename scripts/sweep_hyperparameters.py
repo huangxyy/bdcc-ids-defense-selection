@@ -4,9 +4,11 @@ Varies the training-time perturbation budget and the defense-specific
 coefficients (TRADES beta, Free AT replays, sensitivity ratio) and records how
 the four-dimensional profiles and the resulting selections respond.
 
-    python sweep_hyperparameters.py --device cuda --out-dir outputs/sweep
+    python scripts/sweep_hyperparameters.py --device cuda --out-dir outputs/sweep
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import copy

@@ -7,9 +7,11 @@ Trains all six defenses per seed, then runs:
   - Full test set PGD attack evaluation
 
 Usage:
-  uv run python code/analyze_extended.py --device cuda --output-dir outputs/extended_analysis
+  uv run python scripts/analyze_extended.py --device cuda --output-dir outputs/extended_analysis
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import copy

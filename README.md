@@ -29,13 +29,16 @@ cd bdcc-ids-defense-selection
 uv sync
 
 # 1. the dataset ships with the repo (see "Dataset" below); validate it:
-uv run python code/prepare_data.py
+uv run python scripts/prepare_data.py
 
 # 2. a few seconds: confirms the environment and the data are usable
-uv run python code/smoke_test.py
+uv run python scripts/smoke_test.py
 
 # 3. the full reproduction
-uv run python run_experiments.py
+uv run python scripts/run_experiments.py
+
+# 4. verify the checkout end to end (data, lint, tests, smoke test, dry run)
+make verify
 ```
 
 `uv run` executes the command inside the project environment, so no manual activation is
@@ -46,7 +49,12 @@ automatically when missing.
 All paths are resolved against the repository root, so every documented command can be
 started from any working directory.
 
-Run `uv run python run_experiments.py --dry-run` to see the exact commands without executing them.
+Run `uv run python scripts/run_experiments.py --dry-run` to see the exact commands without executing them.
+
+`make verify` is the single entry point for validation; `make quick` runs the fast subset
+(data + lint + tests) in about ten seconds. The verification levels, the manuscript-to-command
+map and the acceptance criteria are in [docs/verification.md](docs/verification.md); the layout
+conventions are in [docs/structure.md](docs/structure.md).
 
 ---
 
@@ -61,8 +69,8 @@ server in mainland China does not wait for `pypi.org`; outside China override it
 shortcut:
 
 ```bash
-bash code/setup_server.sh          # uv sync (mirror-aware, CPython 3.12 + locked deps)
-bash code/setup_server.sh --pip    # reuse an existing conda torch: pip-install the other deps
+bash scripts/setup_server.sh          # uv sync (mirror-aware, CPython 3.12 + locked deps)
+bash scripts/setup_server.sh --pip    # reuse an existing conda torch: pip-install the other deps
 ```
 
 ```bash
@@ -71,7 +79,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 cd bdcc-ids-defense-selection
 uv sync                       # downloads CPython 3.12 + the locked CUDA build of torch
-uv run python code/check_devices.py
+uv run python scripts/check_devices.py
 ```
 
 `check_devices.py` prints the torch CUDA build, every visible GPU (name, memory, compute
@@ -85,7 +93,7 @@ wheel does not match the driver. Install the wheel for your driver's CUDA versio
 # example: CUDA 13.0 wheels (RTX 50-series / Blackwell need a recent CUDA build)
 uv pip install --python .venv/bin/python --reinstall torch \
     --index-url https://download.pytorch.org/whl/cu130
-uv run python code/check_devices.py     # expect "available    : True"
+uv run python scripts/check_devices.py     # expect "available    : True"
 ```
 
 Other indices (`cu128`, `cu126`, `cu118`, ...) live at <https://download.pytorch.org/whl/>.
@@ -115,11 +123,11 @@ data/test.csv      82,332 records    <- official UNSW_NB15_testing-set.csv
 
 This is the **official split direction**: the larger partition is used for training.
 A frequent mistake is to save the two downloaded files under the names train/test without
-checking, which silently reverses the split. `code/prepare_data.py` detects that and
+checking, which silently reverses the split. `scripts/prepare_data.py` detects that and
 `--fix-swap` repairs it:
 
 ```bash
-uv run python code/prepare_data.py --fix-swap
+uv run python scripts/prepare_data.py --fix-swap
 ```
 
 CIC-IDS2017 is **not** shipped (it is optional and only needed by the cross-dataset scripts);
@@ -134,38 +142,48 @@ bdcc-ids-defense-selection/
 ├── pyproject.toml                            # project metadata + dependencies (uv)
 ├── uv.lock                                   # fully pinned dependency lock
 ├── .python-version                           # interpreter version used by uv
-├── run_experiments.py                        # one-command reproduction of all three backbones
-├── code/
-│   ├── ids_defense_selection/                # the library (everything importable)
-│   │   ├── config.py                         # ExperimentConfig + generated CLI
-│   │   ├── data.py                           # feature pipeline, loaders, seeding
-│   │   ├── attacks.py                        # FGSM / PGD / C&W / APGD + constraints
-│   │   ├── defenses.py                       # six defenses, optional extras, masks
-│   │   ├── evaluation.py                     # metrics, prediction, shared eval loop
-│   │   ├── reporting.py                      # aggregation, significance tests, figures
-│   │   ├── backbones.py                      # MLP / 1D-CNN / FT-Transformer models
-│   │   ├── experiment.py                     # the MLP end-to-end pipeline
-│   │   ├── phi4.py                           # worst-class recall evaluation
-│   │   ├── adaptive.py                       # adaptive attack suite
-│   │   └── style.py                          # shared matplotlib style + palette
-│   ├── prepare_data.py                       # validate / repair the dataset layout
-│   ├── smoke_test.py                         # fast end-to-end sanity check
-│   ├── check_devices.py                      # CPU / CUDA / MPS availability report
-│   ├── setup_server.sh                       # one-command server setup (mirror-aware)
+├── Makefile                                  # make verify / test / lint / smoke / dry-run
+├── docs/
+│   ├── structure.md                          # repository layout and conventions
+│   └── verification.md                       # verification levels, commands, artefact map
+├── src/
+│   └── ids_defense_selection/                # the library (everything importable)
+│       ├── config.py                         # ExperimentConfig + generated CLI
+│       ├── data.py                           # feature pipeline, loaders, seeding
+│       ├── attacks.py                        # FGSM / PGD / C&W / APGD + constraints
+│       ├── defenses.py                       # six defenses, optional extras, masks
+│       ├── evaluation.py                     # metrics, prediction, shared eval loop
+│       ├── reporting.py                      # aggregation, significance tests, figures
+│       ├── selection.py                      # Pareto filtering + preference-weighted selection
+│       ├── backbones.py                      # MLP / 1D-CNN / FT-Transformer models
+│       ├── experiment.py                     # the MLP end-to-end pipeline
+│       ├── phi4.py                           # worst-class recall evaluation
+│       ├── adaptive.py                       # adaptive attack suite
+│       └── style.py                          # shared matplotlib style + palette
+├── scripts/                                  # entry points (CLI + experiment orchestration)
+│   ├── _bootstrap.py                         # puts src/ on sys.path for every script
+│   ├── run_experiments.py                    # one-command reproduction of all three backbones
 │   ├── run_mlp.py                            # MLP experiment
 │   ├── run_cnn1d.py                          # 1D-CNN experiment
 │   ├── run_ft_transformer.py                 # FT-Transformer experiment
 │   ├── evaluate_phi4_cnn.py                  # phi4 (worst-class recall), 1D-CNN
 │   ├── evaluate_phi4_ft.py                   # phi4 (worst-class recall), FT-Transformer
-│   ├── pareto_selection.py                   # Pareto filtering + preference-weighted selection
+│   ├── pareto_selection.py                   # CLI for ids_defense_selection.selection
 │   ├── evaluate_cross_backbone_transfer.py   # transfer-attack matrix
 │   ├── run_cicids2017.py                     # CIC-IDS2017 cross-dataset run
 │   ├── run_cicids2017_source_disjoint.py     # source-disjoint CIC-IDS2017 variant
 │   ├── sweep_hyperparameters.py              # hyperparameter sensitivity
 │   ├── analyze_extended.py                   # epsilon sweep, ROC, gradient masking
+│   ├── prepare_data.py                       # validate / repair the dataset layout
+│   ├── smoke_test.py                         # fast end-to-end sanity check
+│   ├── check_devices.py                      # CPU / CUDA / MPS availability report
+│   ├── verify.py                             # one-command verification (make verify)
+│   ├── check_outputs.py                      # validate a completed outputs/ tree
+│   ├── setup_server.sh                       # one-command server setup (mirror-aware)
 │   └── make_figures_matlab.m                 # MATLAB: Figure 2 (Pareto) and related panels
-├── data/            # place the datasets here (not tracked)
-└── outputs/         # experiment outputs (not tracked)
+├── tests/                                    # unit, integration and structure tests
+├── data/                                     # UNSW-NB15 partitions (shipped)
+└── outputs/                                  # experiment outputs (ignored; see outputs/README.md)
 ```
 
 ### Which script produces which reported result
@@ -180,7 +198,8 @@ bdcc-ids-defense-selection/
 The remaining scripts (`run_cicids2017*.py`, `evaluate_cross_backbone_transfer.py`,
 `sweep_hyperparameters.py`, `analyze_extended.py`) implement analyses that are **not** part of the
 reported tables. The adaptive attack suite lives in
-`code/ids_defense_selection/adaptive.py` and is used by `smoke_test.py`.
+`src/ids_defense_selection/adaptive.py`; it runs as part of the evaluation
+(`evaluate_defenses`) whenever `--adaptive-eval` is passed, and `smoke_test.py` exercises it too.
 
 ---
 
@@ -194,17 +213,17 @@ machine fails immediately with a clear message instead of a deep torch error. Th
 device is printed at startup and recorded as `resolved_device` in `run_summary.json`.
 
 ```bash
-uv run python code/check_devices.py                  # inspect CPU / CUDA / MPS
-uv run python run_experiments.py                     # auto-selects the device
-uv run python code/run_mlp.py --device cpu           # pin CPU
-uv run python code/run_mlp.py --device cuda:1        # pin a specific GPU
+uv run python scripts/check_devices.py                  # inspect CPU / CUDA / MPS
+uv run python scripts/run_experiments.py                     # auto-selects the device
+uv run python scripts/run_mlp.py --device cpu           # pin CPU
+uv run python scripts/run_mlp.py --device cuda:1        # pin a specific GPU
 ```
 
 ### Full pipeline
 
 ```bash
-uv run python run_experiments.py --device cuda                     # MLP, 1D-CNN, FT-Transformer
-uv run python run_experiments.py --backbones mlp,cnn --device cuda # a subset
+uv run python scripts/run_experiments.py --device cuda                     # MLP, 1D-CNN, FT-Transformer
+uv run python scripts/run_experiments.py --backbones mlp,cnn --device cuda # a subset
 ```
 
 Backbones run **sequentially on purpose**: running them in parallel makes them compete for the
@@ -236,8 +255,8 @@ masked defenses) is opt-in because it is expensive: add `--adaptive-eval` (optio
 ### Worst-class recall (phi4), five seeds
 
 ```bash
-uv run python code/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn
-uv run python code/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft
+uv run python scripts/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn
+uv run python scripts/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft
 ```
 
 Both scripts default to the five study seeds; pass `--seeds 42` for the single-seed
@@ -248,14 +267,14 @@ and evaluates with `--eval-pgd-steps 20`; the two budgets are recorded separatel
 ### Pareto filtering and selection
 
 ```bash
-uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
+uv run python scripts/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10
 ```
 
 The decision step now accounts for run-to-run variation and can enforce minimum standards:
 
 ```bash
 # uncertainty-aware Pareto (mean +/- 1 std), drop candidates below the thresholds
-uv run python code/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
+uv run python scripts/pareto_selection.py --confidence-margin 1.0 --min-phi2 0.80 --min-phi4 0.10
 ```
 
 `risk_profile_4d.csv` carries the per-objective standard deviations and both the
@@ -331,8 +350,8 @@ the configuration in that structure, and the same views are available in Python
 while the flat access used by the code (`config.batch_size`) keeps working unchanged.
 
 ```bash
-uv run python code/run_cnn1d.py --help              # the full list, with defaults
-uv run python code/run_mlp.py --train-path data/train.csv --test-path data/test.csv --print-config
+uv run python scripts/run_cnn1d.py --help              # the full list, with defaults
+uv run python scripts/run_mlp.py --train-path data/train.csv --test-path data/test.csv --print-config
 ```
 
 Complex types are parsed from comma-separated strings:
@@ -349,21 +368,21 @@ Anything not passed keeps its dataclass default, and `--print-config` dumps the 
 configuration as JSON before any work starts:
 
 ```bash
-uv run python code/run_ft_transformer.py --seeds 1,2,3 --adv-epsilon 0.09 --print-config
+uv run python scripts/run_ft_transformer.py --seeds 1,2,3 --adv-epsilon 0.09 --print-config
 ```
 
 A few representative settings:
 
 ```bash
 # a different MLP architecture and a different evaluation budget list
-uv run python code/run_mlp.py --train-path data/train.csv --test-path data/test.csv \
+uv run python scripts/run_mlp.py --train-path data/train.csv --test-path data/test.csv \
     --hidden-dims 256,128,64 --dropout 0.3 --epsilon-list 0.02,0.05,0.10
 
 # three seeds instead of five
-uv run python code/run_cnn1d.py --seeds 7,42,100
+uv run python scripts/run_cnn1d.py --seeds 7,42,100
 
 # the epsilon/10 PGD step size written in the manuscript methods section
-uv run python code/run_mlp.py --eval-pgd-alpha-ratio 0.10
+uv run python scripts/run_mlp.py --eval-pgd-alpha-ratio 0.10
 ```
 
 ### Optional extra defense methods
@@ -374,7 +393,7 @@ DST-SA-TRADES. They are kept in full so the implementations stay available and r
 but they are only trained when explicitly requested:
 
 ```bash
-uv run python code/run_mlp.py --extra-methods progressive,sa_trades,dst_sa_trades
+uv run python scripts/run_mlp.py --extra-methods progressive,sa_trades,dst_sa_trades
 ```
 
 With the default (empty) setting the code trains exactly the six defenses the paper reports and
@@ -401,17 +420,22 @@ matters because several Pareto decisions here hinge on margins of that size.
 
 ## Development
 
-The library lives in `code/ids_defense_selection/`; the scripts in `code/` are thin entry points
-that import it. Install the development tools and run the checks from the repository root:
+The library lives in `src/ids_defense_selection/`; the scripts in `scripts/` are thin entry points.
+Anything that should be unit-tested belongs in the library (for example, the Pareto decision logic
+is `ids_defense_selection/selection.py`, and `scripts/pareto_selection.py` is only its CLI).
+Install the development tools and run the checks from the repository root:
 
 ```bash
 uv sync --group dev
-uv run pytest          # end-to-end pipeline test on synthetic data (CPU, seconds)
+make quick             # dataset check + lint + tests (about ten seconds)
+make verify            # the same plus the real-data smoke test and the dry run
+uv run pytest          # pytest directly
 uv run ruff check      # lint / undefined-name checks
 ```
 
 The tests build a small synthetic UNSW-NB15-shaped dataset, so they need neither the real data
-nor a GPU.
+nor a GPU. `tests/test_structure.py` enforces the layout conventions, so a new script that cannot
+run from an arbitrary working directory is caught by the suite.
 
 ---
 

@@ -5,9 +5,9 @@ Runs the three backbone experiments in sequence (running them in parallel would
 make them compete for the GPU and invalidate the training-cost measurements,
 which are part of objective phi3).
 
-    python run_experiments.py --device cuda
-    python run_experiments.py --backbones mlp,cnn --device cuda
-    python run_experiments.py --dry-run
+    uv run python scripts/run_experiments.py --device cuda
+    uv run python scripts/run_experiments.py --backbones mlp,cnn --device cuda
+    uv run python scripts/run_experiments.py --dry-run
 
 Outputs land in outputs/<backbone>/:
     mean_results.csv, std_results.csv, raw_results.csv,
@@ -15,15 +15,16 @@ Outputs land in outputs/<backbone>/:
 """
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
+
 import argparse
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-CODE = ROOT / "code"
-sys.path.insert(0, str(CODE))
+#: Directory that holds this script and every other entry point.
+SCRIPTS = Path(__file__).resolve().parent
 
 from ids_defense_selection.paths import (  # noqa: E402
     BACKBONE_OUTPUT_SUBDIRS,
@@ -58,7 +59,7 @@ BACKBONES = {
 
 def build_cmd(key: str, args, data_dir: Path) -> list[str]:
     spec = BACKBONES[key]
-    cmd = [sys.executable, "-u", str(CODE / spec["script"]),
+    cmd = [sys.executable, "-u", str(SCRIPTS / spec["script"]),
            "--train-path", str(data_dir / "train.csv"),
            "--test-path", str(data_dir / "test.csv"),
            "--output-dir", str(spec["out"]),
@@ -99,7 +100,7 @@ def main() -> int:
     if args.dry_run:
         print("   (dry run -- dataset check skipped)")
     else:
-        rc = subprocess.call([sys.executable, str(CODE / "prepare_data.py"), "--data-dir", args.data_dir])
+        rc = subprocess.call([sys.executable, str(SCRIPTS / "prepare_data.py"), "--data-dir", args.data_dir])
         if rc != 0:
             print("\nDataset is not ready. Fix it and re-run.")
             return rc
@@ -135,9 +136,9 @@ def main() -> int:
         print(f"  {key:<5} {dt/60:>7.1f} min   {out}/")
     print()
     print("Next steps")
-    print("  uv run python code/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn")
-    print("  uv run python code/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft")
-    print("  uv run python code/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10")
+    print("  uv run python scripts/evaluate_phi4_cnn.py --device cuda --output-dir outputs/phi4_cnn")
+    print("  uv run python scripts/evaluate_phi4_ft.py  --device cuda --output-dir outputs/phi4_ft")
+    print("  uv run python scripts/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10")
     print("=" * 78)
     return 0
 

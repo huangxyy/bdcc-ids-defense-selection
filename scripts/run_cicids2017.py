@@ -6,11 +6,13 @@ different traffic distribution.
 
 Run:
 
-    uv run python code/run_cicids2017.py --device cuda
+    uv run python scripts/run_cicids2017.py --device cuda
 
 The dataset is not shipped with this repository; see data/README.md.
 """
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 import argparse
 import json

@@ -75,7 +75,7 @@ def log_device(requested: str, resolved: torch.device) -> None:
 
 
 def device_report() -> str:
-    """Multi-line environment report used by ``code/check_devices.py``."""
+    """Multi-line environment report used by ``scripts/check_devices.py``."""
     cudnn_version = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
     lines = [
         "== environment ==",
