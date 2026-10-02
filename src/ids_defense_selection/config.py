@@ -128,6 +128,10 @@ class TrainingConfig:
     weight_decay: float = 1e-5
     hidden_dims: tuple[int, ...] = (128, 64, 32)
     dropout: float = 0.15
+    ft_d_token: int = 32
+    ft_n_heads: int = 2
+    ft_n_layers: int = 2
+    ft_d_ffn: int = 64
 
     def problems(self) -> list[str]:
         issues = []
@@ -149,6 +153,18 @@ class TrainingConfig:
             issues.append(f"hidden_dims must be three positive integers, got {tuple(self.hidden_dims)!r}")
         if not 0.0 <= self.dropout < 1.0:
             issues.append("dropout must be in [0, 1)")
+        if self.ft_d_token < 1:
+            issues.append("ft_d_token must be >= 1")
+        if self.ft_n_heads < 1:
+            issues.append("ft_n_heads must be >= 1")
+        if self.ft_n_layers < 1:
+            issues.append("ft_n_layers must be >= 1")
+        if self.ft_d_ffn < 1:
+            issues.append("ft_d_ffn must be >= 1")
+        if self.ft_n_heads >= 1 and self.ft_d_token >= 1 and self.ft_d_token % self.ft_n_heads:
+            issues.append(
+                f"ft_d_token ({self.ft_d_token}) must be divisible by ft_n_heads ({self.ft_n_heads})"
+            )
         return issues
 
 
@@ -375,6 +391,10 @@ class ExperimentConfig:
     weight_decay: float = option(1e-5, "Adam weight decay", group="training")
     hidden_dims: tuple[int, ...] = option((128, 64, 32), "MLP hidden layer widths", group="training")
     dropout: float = option(0.15, "dropout probability", group="training")
+    ft_d_token: int = option(32, "FT-Transformer token width d_token", group="training")
+    ft_n_heads: int = option(2, "FT-Transformer attention heads (must divide ft_d_token)", group="training")
+    ft_n_layers: int = option(2, "FT-Transformer encoder layers", group="training")
+    ft_d_ffn: int = option(64, "FT-Transformer feed-forward width", group="training")
 
     # --- adversarial training budget ----------------------------------------
     adv_epsilon: float = option(

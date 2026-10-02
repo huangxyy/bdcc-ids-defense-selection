@@ -130,6 +130,25 @@ FT_TRANSFORMER_KWARGS: dict[str, int] = {
 }
 
 
-def build_ft_transformer(input_dim: int, dropout: float = 0.15) -> FTTransformerBackbone:
-    """Construct an FT-Transformer with the paper's hyperparameters."""
-    return FTTransformerBackbone(input_dim, dropout=dropout, **FT_TRANSFORMER_KWARGS)
+def ft_transformer_kwargs(config: object | None = None) -> dict[str, int]:
+    """Return the FT-Transformer capacity, optionally overridden by a config.
+
+    ``config=None`` returns the paper defaults; passing an ``ExperimentConfig``
+    reads ``ft_d_token`` / ``ft_n_heads`` / ``ft_n_layers`` / ``ft_d_ffn``, so
+    capacity ablations (e.g. on a large GPU) do not require code edits.
+    """
+    if config is None:
+        return dict(FT_TRANSFORMER_KWARGS)
+    return {
+        "d_token": int(getattr(config, "ft_d_token")),
+        "n_heads": int(getattr(config, "ft_n_heads")),
+        "n_layers": int(getattr(config, "ft_n_layers")),
+        "d_ffn": int(getattr(config, "ft_d_ffn")),
+    }
+
+
+def build_ft_transformer(input_dim: int, dropout: float = 0.15,
+                         config: object | None = None) -> FTTransformerBackbone:
+    """Construct an FT-Transformer from the paper defaults or a config."""
+    return FTTransformerBackbone(input_dim, dropout=dropout,
+                                 **ft_transformer_kwargs(config))
