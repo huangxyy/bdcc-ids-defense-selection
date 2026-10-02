@@ -226,6 +226,33 @@ uv run python scripts/run_experiments.py --device cuda                     # MLP
 uv run python scripts/run_experiments.py --backbones mlp,cnn --device cuda # a subset
 ```
 
+### Large-GPU runs (RTX 5090 and similar)
+
+```bash
+uv run python scripts/run_experiments.py --backbones ft --ft-capacity medium --device cuda
+uv run python scripts/run_experiments.py --device cuda \
+  --seeds 7,13,21,42,100,11,23,37,59,89 --eval-attack-rows 82332 \
+  --epsilon-list 0.02,0.05,0.10,0.15 --adaptive-eval \
+  --adaptive-steps 100 --adaptive-restarts 10
+```
+
+The example scales the *evidence* while keeping the manuscript's training protocol
+(10+8 epochs, eps_train = 0.06, batch size): ten seeds, the full 82,332-row test partition,
+four budgets, and 100-step x 10-restart adaptive attacks. `--ft-capacity medium|large`
+switches the FT-Transformer to the capacity-ablation presets (d_token 64/4 heads/3
+layers/d_ffn 128, or 128/8/4/256); main runs keep the submitted `paper` capacity.
+
+Every one of the 55 configuration fields can be overridden in the orchestrator with a
+repeatable `--set field=value` (it wins over the other flags and presets):
+
+```bash
+uv run python scripts/run_experiments.py --device cuda \
+  --seeds 7,13,21,42,100,11,23,37,59,89 --eval-attack-rows 82332 \
+  --set baseline_epochs=20 --set adv_epochs=16 --set batch_size=2048 \
+  --set ft_d_token=96 --set ft_n_heads=6 --set ft_n_layers=4 --set ft_d_ffn=384 \
+  --set learning_rate=2e-3 --set adv_epsilon=0.09
+```
+
 Backbones run **sequentially on purpose**: running them in parallel makes them compete for the
 GPU, which would corrupt the training-cost measurements feeding objective `phi3`.
 
@@ -303,6 +330,7 @@ The FT-Transformer dominates the total cost. All backbones also run on CPU, subs
 | Optimizer | Adam, lr = 1e-3, weight decay = 1e-5 |
 | Batch size | 1024 (MLP, 1D-CNN); 512 (FT-Transformer) |
 | Dropout | 0.15 |
+| FT-Transformer capacity | d_token = 32, heads = 2, layers = 2, d_ffn = 64 (`--ft-d-token`, `--ft-n-heads`, `--ft-n-layers`, `--ft-d-ffn`) |
 | Random seeds | 7, 13, 21, 42, 100 (set with --seeds) |
 | Evaluation subset | 20,000 stratified test samples (`--eval-attack-rows`), fixed seed 2026 (`--eval-subset-seed`), shared by all defenses |
 | **Adversarial training budget** | **epsilon = 0.06, alpha = 0.015, 20 steps** (FT-Transformer: 7 training steps) |
@@ -334,7 +362,7 @@ C&W L2 (30 steps, lr = 0.01, c = 1.0); APGD-CE (50 steps, rho = 0.75).
 
 **Every field of `ExperimentConfig` is a command-line flag.** The flags are generated from the
 dataclass itself, so the CLI cannot drift out of sync with the configuration: adding a field to
-`ExperimentConfig` automatically adds a flag. All 51 fields are exposed identically by all three
+`ExperimentConfig` automatically adds a flag. All 55 fields are exposed identically by all three
 backbone scripts.
 
 Each field also carries its own help text and legacy flag aliases as dataclass metadata, and the

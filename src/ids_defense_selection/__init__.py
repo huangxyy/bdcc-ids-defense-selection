@@ -107,6 +107,7 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         FT_TRANSFORMER_KWARGS as FT_TRANSFORMER_KWARGS,
         MLPBackbone as MLPBackbone,
         build_ft_transformer as build_ft_transformer,
+        ft_transformer_kwargs as ft_transformer_kwargs,
     )
     from .data import (
         build_features as build_features,
@@ -233,6 +234,7 @@ _EXPORTS: dict[str, str] = {
     "FT_TRANSFORMER_KWARGS": ".backbones",
     "MLPBackbone": ".backbones",
     "build_ft_transformer": ".backbones",
+    "ft_transformer_kwargs": ".backbones",
     # data
     "build_features": ".data",
     "load_unsw_nb15": ".data",

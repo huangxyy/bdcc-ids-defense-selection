@@ -215,6 +215,31 @@ uv run python scripts/run_experiments.py --device cuda                     # MLP
 uv run python scripts/run_experiments.py --backbones mlp,cnn --device cuda # 只跑子集
 ```
 
+### 大显卡运行（RTX 5090 等）
+
+```bash
+uv run python scripts/run_experiments.py --backbones ft --ft-capacity medium --device cuda
+uv run python scripts/run_experiments.py --device cuda \
+  --seeds 7,13,21,42,100,11,23,37,59,89 --eval-attack-rows 82332 \
+  --epsilon-list 0.02,0.05,0.10,0.15 --adaptive-eval \
+  --adaptive-steps 100 --adaptive-restarts 10
+```
+
+上面的例子保持与论文一致的训练协议（10+8 epochs、ε_train = 0.06、批大小不变），
+把算力花在**证据规模**上：10 个固定种子、完整 82,332 条测试划分、4 个扰动预算、
+100 步 × 10 次重启的自适应攻击。`--ft-capacity medium|large` 切换到 FT-Transformer
+容量消融预设（d_token 64/4 heads/3 layers/d_ffn 128 或 128/8/4/256），主实验保持投稿版 `paper` 容量。
+
+全部 55 个配置字段都可以在编排脚本里用可重复的 `--set 字段=值` 覆盖（优先于其他参数与预设）：
+
+```bash
+uv run python scripts/run_experiments.py --device cuda \
+  --seeds 7,13,21,42,100,11,23,37,59,89 --eval-attack-rows 82332 \
+  --set baseline_epochs=20 --set adv_epochs=16 --set batch_size=2048 \
+  --set ft_d_token=96 --set ft_n_heads=6 --set ft_n_layers=4 --set ft_d_ffn=384 \
+  --set learning_rate=2e-3 --set adv_epsilon=0.09
+```
+
 各个骨干网络**故意串行运行**：并行运行会让它们争抢 GPU，从而污染用于目标 phi3 的训练成本测量。
 
 每次运行写入 `outputs/<backbone>/`：
@@ -287,6 +312,7 @@ FT-Transformer 占总成本的绝大部分。所有骨干网络也能在 CPU 上
 | 优化器 | Adam，lr = 1e-3，weight decay = 1e-5 |
 | 批大小 | 1024（MLP、1D-CNN）；512（FT-Transformer） |
 | Dropout | 0.15 |
+| FT-Transformer 容量 | d_token = 32，heads = 2，layers = 2，d_ffn = 64（`--ft-d-token`、`--ft-n-heads`、`--ft-n-layers`、`--ft-d-ffn`） |
 | 随机种子 | 7、13、21、42、100（用 `--seeds` 设置） |
 | 评测子集 | 20,000 条分层测试样本（`--eval-attack-rows`），固定种子 2026（`--eval-subset-seed`），所有防御共享 |
 | **对抗训练预算** | **epsilon = 0.06，alpha = 0.015，20 步**（FT-Transformer：训练 7 步） |
@@ -316,7 +342,7 @@ C&W L2（30 步，lr = 0.01，c = 1.0）；APGD-CE（50 步，rho = 0.75）。
 ## 完整参数化
 
 **`ExperimentConfig` 的每个字段都是一个命令行参数。** 参数由 dataclass 自动生成，因此 CLI
-不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 51 个字段在三个
+不可能与配置脱节：给 `ExperimentConfig` 增加一个字段，就会自动增加一个参数。全部 55 个字段在三个
 骨干脚本中完全一致。
 
 每个字段的帮助文本和旧参数别名都写在 dataclass 元数据里；配置在构造时就会做校验：像

@@ -15,12 +15,12 @@ import _bootstrap  # noqa: F401  (adds ../src to sys.path when run by path)
 
 from ids_defense_selection import (
     DEFAULT_DATA_DIR,
-    FT_TRANSFORMER_KWARGS,
     FTTransformerBackbone,
     build_parser,
     config_from_args,
     default_phi4_output_dir,
     emit_config,
+    ft_transformer_kwargs,
     log_device,
     resolve_device,
     resolve_path,
@@ -49,6 +49,7 @@ def main() -> None:
     )
     if args.print_config:
         emit_config(config)
+    ft_kwargs = ft_transformer_kwargs(config)
 
     device = resolve_device(config.device)
     log_device(config.device, device)
@@ -56,7 +57,7 @@ def main() -> None:
           flush=True)
     evaluate_phi4(
         config,
-        lambda input_dim: FTTransformerBackbone(input_dim, **FT_TRANSFORMER_KWARGS),
+        lambda input_dim: FTTransformerBackbone(input_dim, **ft_kwargs),
         device,
     )
 

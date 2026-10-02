@@ -24,7 +24,6 @@ from ids_defense_selection import (
     CNN1DBackbone,
     DEFAULT_DATA_DIR,
     DEFAULT_OUTPUT_ROOT,
-    FT_TRANSFORMER_KWARGS,
     FTTransformerBackbone,
     MLPBackbone,
     build_features,
@@ -32,6 +31,7 @@ from ids_defense_selection import (
     config_from_args,
     emit_config,
     fit_supervised,
+    ft_transformer_kwargs,
     generate_adversarial_examples,
     load_unsw_nb15,
     log_device,
@@ -128,7 +128,8 @@ def main() -> None:
     backbone_factories = {
         "MLP": lambda: MLPBackbone(n_features, config.hidden_dims, config.dropout),
         "1D-CNN": lambda: CNN1DBackbone(n_features, config.dropout),
-        "FT-Transformer": lambda: FTTransformerBackbone(n_features, **FT_TRANSFORMER_KWARGS),
+        "FT-Transformer": lambda: FTTransformerBackbone(
+            n_features, **ft_transformer_kwargs(config)),
     }
     backbone_names = list(backbone_factories)
     results = []

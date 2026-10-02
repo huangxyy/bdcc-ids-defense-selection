@@ -163,6 +163,8 @@ def test_values_are_normalised_on_construction() -> None:
     ({"batch_size": 0}, "batch_size"),
     ({"dropout": 1.0}, "dropout"),
     ({"hidden_dims": (128, 64)}, "hidden_dims"),
+    ({"ft_d_token": 0}, "ft_d_token"),
+    ({"ft_d_token": 48, "ft_n_heads": 5}, "divisible"),
     ({"adv_steps": 0}, "adv_steps"),
     ({"epsilon_list": ()}, "epsilon_list"),
     ({"seeds": ()}, "seeds"),

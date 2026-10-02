@@ -20,7 +20,6 @@ import pandas as pd
 from ids_defense_selection import (
     BackboneRunFrames,
     DEFAULT_DATA_DIR,
-    FT_TRANSFORMER_KWARGS,
     EvaluationSet,
     FTTransformerBackbone,
     build_features,
@@ -30,6 +29,7 @@ from ids_defense_selection import (
     default_output_dir,
     emit_config,
     evaluate_defenses,
+    ft_transformer_kwargs,
     load_unsw_nb15,
     log_device,
     make_dataloader,
@@ -66,6 +66,7 @@ def main() -> None:
     )
     if args.print_config:
         emit_config(config)
+    ft_kwargs = ft_transformer_kwargs(config)
 
     out_dir = Path(config.output_dir)
     device = resolve_device(config.device)
@@ -105,7 +106,7 @@ def main() -> None:
         train_loader = make_dataloader(x_train, y_train, batch_size=config.batch_size, shuffle=True)
         print(f"[ft_transformer][seed {seed}] training started", flush=True)
         trained = train_all_defenses(
-            model_factory=lambda: FTTransformerBackbone(x_train.shape[1], **FT_TRANSFORMER_KWARGS),
+            model_factory=lambda: FTTransformerBackbone(x_train.shape[1], **ft_kwargs),
             config=config,
             train_loader=train_loader,
             device=device,
@@ -141,7 +142,7 @@ def main() -> None:
         adaptive=(pd.concat(adaptive_frames, ignore_index=True) if adaptive_frames
                   else pd.DataFrame()),
     )
-    reference_model = FTTransformerBackbone(x_train.shape[1], **FT_TRANSFORMER_KWARGS)
+    reference_model = FTTransformerBackbone(x_train.shape[1], **ft_kwargs)
 
     if category_frames:
         category_df = pd.concat(category_frames, ignore_index=True)
@@ -163,10 +164,10 @@ def main() -> None:
     summary = {
         "architecture": (
             "FT-Transformer (feature_tokenizer: "
-            f"{x_train.shape[1]}*Linear(1,{FT_TRANSFORMER_KWARGS['d_token']}), CLS token, "
-            f"TransformerEncoder(n_layers={FT_TRANSFORMER_KWARGS['n_layers']}, "
-            f"n_heads={FT_TRANSFORMER_KWARGS['n_heads']}, "
-            f"d_ffn={FT_TRANSFORMER_KWARGS['d_ffn']}), head: LayerNorm+Linear)"
+            f"{x_train.shape[1]}*Linear(1,{ft_kwargs['d_token']}), CLS token, "
+            f"TransformerEncoder(n_layers={ft_kwargs['n_layers']}, "
+            f"n_heads={ft_kwargs['n_heads']}, "
+            f"d_ffn={ft_kwargs['d_ffn']}), head: LayerNorm+Linear)"
         ),
         "resolved_device": str(device),
         "dataset_split": split_summary(len(train_df), len(test_df)),
