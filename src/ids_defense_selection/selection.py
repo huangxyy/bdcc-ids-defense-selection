@@ -931,10 +931,10 @@ def plot_theta_sensitivity(objectives: dict[str, pd.DataFrame], out_path: str) -
 
 # ── CSV output helpers ────────────────────────────────────────────────────────
 
-def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
+def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask,
                            out_path: str, *,
                            stds: pd.DataFrame | None = None,
-                           pareto_deterministic: np.ndarray | None = None,
+                           pareto_deterministic=None,
                            admissible: pd.Series | None = None) -> None:
     """Write the 4-D risk profile with dispersion and both Pareto verdicts.
 
@@ -942,6 +942,12 @@ def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
     margin); ``is_pareto_optimal_deterministic`` keeps the point-estimate
     verdict so a reviewer can see which decisions the margin changes.
     """
+    def as_flag_array(mask) -> np.ndarray:
+        """Align a Series mask to ``obj.index``; never leave NaNs behind."""
+        if isinstance(mask, pd.Series):
+            mask = mask.reindex(obj.index).fillna(False)
+        return np.asarray(mask, dtype=bool)
+
     df = obj.copy().reset_index()
     df.columns = ["model", "phi1_clean_f1", "phi2_resilience",
                   "phi3_cost_eff", "phi4_fairness"]
@@ -950,11 +956,11 @@ def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask: np.ndarray,
         for source, target in zip(("phi1", "phi2", "phi3", "phi4"),
                                   ("phi1_std", "phi2_std", "phi3_std", "phi4_std")):
             df[target] = std_view[source].to_numpy()
-    df["is_pareto_optimal"] = pareto_mask
+    df["is_pareto_optimal"] = as_flag_array(pareto_mask)
     if pareto_deterministic is not None:
-        df["is_pareto_optimal_deterministic"] = pareto_deterministic
+        df["is_pareto_optimal_deterministic"] = as_flag_array(pareto_deterministic)
     if admissible is not None:
-        df["admissible"] = admissible.reindex(obj.index).to_numpy()
+        df["admissible"] = as_flag_array(admissible)
     df.to_csv(out_path, index=False, float_format="%.6f")
     print(f"  Saved: {out_path}")
 

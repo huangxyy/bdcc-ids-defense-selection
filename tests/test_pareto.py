@@ -14,6 +14,7 @@ from ids_defense_selection.selection import (
     BACKBONE_DIRS,
     BACKBONE_LABELS,
     BACKBONE_SELECTION_COLUMNS,
+    OBJECTIVE_COLUMNS,
     apply_admissibility,
     build_objective_matrices,
     build_objective_matrix,
@@ -23,6 +24,7 @@ from ids_defense_selection.selection import (
     resolve_outputs_root,
     select_defense,
     write_selection_csv,
+    write_risk_profile_csv,
 )
 
 
@@ -231,3 +233,25 @@ def test_selection_csv_has_one_column_per_backbone(tmp_path: Path) -> None:
     }
     for column in ("mlp_selected", "cnn_selected", "ft_selected"):
         assert not (frame[column] == "N/A").any()
+
+
+def test_risk_profile_accepts_series_masks_without_nans(tmp_path: Path) -> None:
+    """Masks arrive as Series indexed by model; the CSV must stay boolean."""
+    objectives = pd.DataFrame(
+        [[0.9, 0.8, 0.5, 0.4], [0.7, 0.9, 0.4, 0.6]],
+        index=["a", "b"], columns=OBJECTIVE_COLUMNS,
+    )
+    stds = pd.DataFrame(0.0, index=objectives.index, columns=objectives.columns)
+    path = tmp_path / "risk_profile_4d.csv"
+    write_risk_profile_csv(
+        objectives,
+        pd.Series([True, False], index=objectives.index),
+        str(path),
+        stds=stds,
+        pareto_deterministic=pd.Series([False, True], index=objectives.index),
+        admissible=pd.Series([True, True], index=objectives.index),
+    )
+    frame = pd.read_csv(path)
+    assert frame["is_pareto_optimal"].tolist() == [True, False]
+    assert frame["is_pareto_optimal_deterministic"].tolist() == [False, True]
+    assert not frame[["is_pareto_optimal", "admissible"]].isna().any().any()

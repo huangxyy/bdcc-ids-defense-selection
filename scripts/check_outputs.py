@@ -128,6 +128,14 @@ def check_backbone(label: str, directory: Path, require_analysis: bool,
             missing = columns - set(pd.read_csv(path).columns)
             if missing:
                 errors.append(f"{label}: {name} is missing columns {sorted(missing)}")
+            if name == "risk_profile_4d.csv":
+                frame = pd.read_csv(path)
+                for column in ("is_pareto_optimal", "is_pareto_optimal_deterministic"):
+                    if column in frame.columns and frame[column].isna().any():
+                        errors.append(f"{label}: {name} has NaN values in {column}")
+                if "is_pareto_optimal" in frame.columns and not frame[
+                        "is_pareto_optimal"].fillna(False).any():
+                    errors.append(f"{label}: {name} marks no Pareto-optimal candidate")
         if not (directory / "switching_regions.json").is_file():
             errors.append(f"{label}: missing analysis artefact switching_regions.json")
 
