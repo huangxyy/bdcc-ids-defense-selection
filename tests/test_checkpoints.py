@@ -22,6 +22,7 @@ from ids_defense_selection.defenses import TrainedDefenses
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EVAL_SCRIPT = PROJECT_ROOT / "scripts" / "evaluate_checkpoints.py"
+PHI4_SCRIPT = PROJECT_ROOT / "scripts" / "evaluate_phi4_from_checkpoints.py"
 
 
 def _config() -> ExperimentConfig:
@@ -86,3 +87,13 @@ def test_eval_only_script_help() -> None:
     assert completed.returncode == 0, completed.stderr
     assert "--checkpoint" in completed.stdout
     assert "--adaptive-eval" in completed.stdout
+
+
+def test_phi4_from_checkpoints_script_help() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(PHI4_SCRIPT), "--help"],
+        capture_output=True, text=True, timeout=300, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--checkpoint-root" in completed.stdout
+    assert "--category-epsilon" in completed.stdout

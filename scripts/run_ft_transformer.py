@@ -33,6 +33,7 @@ from ids_defense_selection import (
     load_unsw_nb15,
     log_device,
     make_dataloader,
+    prepare_attack_categories,
     resolve_path,
     resolve_device,
     save_checkpoint,
@@ -83,6 +84,8 @@ def main() -> None:
     x_train, y_train, x_test, y_test, metadata = build_features(train_df, test_df)
     eval_indices = stratified_subset_indices(y_test, config.eval_attack_rows,
                                              seed=config.eval_subset_seed)
+    attack_categories, top_categories = prepare_attack_categories(
+        test_df, eval_indices, y_test[eval_indices], config.top_attack_categories)
     eval_set = EvaluationSet(
         x_eval=x_test[eval_indices],
         y_eval=y_test[eval_indices],
@@ -91,6 +94,8 @@ def main() -> None:
         attack_mask=metadata["numeric_mask"],
         numeric_mins=metadata["numeric_mins"],
         numeric_maxs=metadata["numeric_maxs"],
+        attack_categories=attack_categories,
+        top_categories=top_categories,
     )
 
     results: list[pd.DataFrame] = []
