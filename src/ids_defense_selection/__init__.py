@@ -38,7 +38,9 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers and IDEs only
         reporting as reporting,
         selection as selection,
         spec as spec,
+        stats as stats,
         style as style,
+        supportedness as supportedness,
     )
 
     # Flat exports, mirroring ``_EXPORTS`` below.  These re-exports are what
@@ -322,7 +324,9 @@ _SUBMODULES: tuple[str, ...] = (
     "reporting",
     "selection",
     "spec",
+    "stats",
     "style",
+    "supportedness",
 )
 
 __all__ = sorted(_EXPORTS)

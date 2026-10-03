@@ -19,6 +19,8 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 | `raw_results.csv` | one row per (seed, defense, attack, epsilon) |
 | `mean_results.csv` / `std_results.csv` | seed mean and standard deviation per cell |
 | `significance_tests.csv` | paired t-test and Wilcoxon results between defenses |
+| `significance_enhanced.csv` | paired tests with Holm/BH correction, Cohen's d_z and bootstrap CIs (`scripts/enhance_significance.py`) |
+| `supportedness.csv` | supported vs unsupported efficient points of the front (`scripts/check_supportedness.py`) |
 | `efficiency_raw.csv` / `efficiency_mean.csv` | training time, parameter count, inference latency |
 | `attack_generalization.csv` | robustness to attacks not used in training |
 | `adaptive_attack_raw.csv` / `adaptive_attack_mean.csv` | adaptive suite (`--adaptive-eval`) |

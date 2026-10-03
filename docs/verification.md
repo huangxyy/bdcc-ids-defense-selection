@@ -38,6 +38,7 @@ uv run python scripts/verify.py --quick
 | 8 产物校验 | `uv run python scripts/check_outputs.py --require-analysis` | 必需文件/列、官方划分、种子数、离散度 | 秒 |
 | 9 实验留痕 | `uv run python scripts/log_experiment.py --outputs-dir outputs/<run> --record-dir <dir> --title "..."` | 生成 markdown 记录(数值自动来自 CSV)并登记 INDEX.md | 秒 |
 | 10 权重复用 | `uv run python scripts/evaluate_checkpoints.py --checkpoint outputs/<run>/checkpoints/seed7 --output-dir outputs/<eval>` | 加载已训练权重做评测变体(ε/步长/自适应),不重训 | 分钟 |
+| 11 统计与有效解 | `uv run python scripts/enhance_significance.py`、`uv run python scripts/check_supportedness.py` | Holm/BH 校正、效应量、bootstrap CI;supported/unsupported 有效解判定 | 秒 |
 
 ## 3. 论文内容 → 命令 → 产物
 
