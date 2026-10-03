@@ -61,3 +61,57 @@ def supported_solutions(objectives: pd.DataFrame, *, tol: float = 1e-9) -> pd.Da
             **{f"theta{k + 1}": float(theta[k]) for k in range(n_objectives)},
         })
     return pd.DataFrame(rows)
+
+
+def tchebycheff_scores(objectives: pd.DataFrame, theta, *, rho: float = 0.01) -> np.ndarray:
+    """Augmented weighted Tchebycheff score (minimise; smaller is better).
+
+    ``gap = (ideal - x) * theta``; the score is ``max(gap) - rho * sum(gap)``.
+    Unlike the weighted sum, this scalarisation can reach unsupported efficient
+    points when the front is non-convex.
+    """
+    matrix = objectives.to_numpy(dtype=float)
+    ideal = matrix.max(axis=0)
+    gap = (ideal - matrix) * np.asarray(theta, dtype=float)
+    return gap.max(axis=1) - rho * gap.sum(axis=1)
+
+
+def tchebycheff_selection(objectives: pd.DataFrame, theta, *, rho: float = 0.01) -> str:
+    """Candidate minimising the augmented Tchebycheff score."""
+    scores = tchebycheff_scores(objectives, theta, rho=rho)
+    return objectives.index[int(np.argmin(scores))]
+
+
+def _simplex_grid(n_objectives: int, step: float) -> list[list[float]]:
+    n = int(round(1.0 / step))
+    if n < 1 or abs(n * step - 1.0) > 1e-9:
+        raise ValueError(f"step {step!r} must divide 1.0 exactly")
+    points: list[list[float]] = []
+
+    def walk(prefix: list[int], remaining: int, slots: int) -> None:
+        if slots == 1:
+            points.append([value / n for value in prefix + [remaining]])
+            return
+        for value in range(remaining + 1):
+            walk(prefix + [value], remaining - value, slots - 1)
+
+    walk([], n, n_objectives)
+    return points
+
+
+def tchebycheff_reachability(objectives: pd.DataFrame, *, step: float = 0.05,
+                            rho: float = 0.01) -> pd.DataFrame:
+    """Which candidates are reachable by the augmented Tchebycheff rule."""
+    if objectives.empty:
+        return pd.DataFrame(columns=["model", "reachable_tchebycheff", "theta_tchebycheff"])
+    reachable: dict[str, list[float] | None] = {name: None for name in objectives.index}
+    for theta in _simplex_grid(objectives.shape[1], step):
+        winner = tchebycheff_selection(objectives, theta, rho=rho)
+        if reachable[winner] is None:
+            reachable[winner] = list(theta)
+    return pd.DataFrame([
+        {"model": name,
+         "reachable_tchebycheff": theta is not None,
+         "theta_tchebycheff": "" if theta is None else ",".join(f"{v:.2f}" for v in theta)}
+        for name, theta in reachable.items()
+    ])
