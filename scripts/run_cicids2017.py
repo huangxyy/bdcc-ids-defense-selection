@@ -580,11 +580,13 @@ def parse_args() -> CICExperimentConfig:
     parser.add_argument("--baseline-epochs", type=int, default=8)
     parser.add_argument("--adv-epochs", type=int, default=6)
     parser.add_argument("--eval-attack-rows", type=int, default=30000)
+    parser.add_argument("--seeds", default=None,
+                        help="comma-separated training seeds (default: 7,13,21,42,100)")
     parser.add_argument("--device", default="auto",
                         help="torch device: auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--rebuild-cache", action="store_true")
     args = parser.parse_args()
-    return CICExperimentConfig(
+    kwargs = dict(
         data_dir=str(idsds.resolve_path(args.data_dir)),
         sampled_csv=str(idsds.resolve_path(args.sampled_csv)),
         output_dir=str(idsds.resolve_path(args.output_dir)),
@@ -596,6 +598,10 @@ def parse_args() -> CICExperimentConfig:
         device=args.device,
         rebuild_cache=args.rebuild_cache,
     )
+    if args.seeds:
+        kwargs["seeds"] = tuple(
+            int(part) for part in args.seeds.split(",") if part.strip())
+    return CICExperimentConfig(**kwargs)
 
 
 if __name__ == "__main__":
