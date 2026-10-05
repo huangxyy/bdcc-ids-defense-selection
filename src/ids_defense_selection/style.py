@@ -16,13 +16,14 @@ STYLE = {
     "figure.dpi": 600,
     "savefig.dpi": 600,
     "savefig.bbox": "tight",
-    "savefig.pad_inches": 0.02,
+    "savefig.pad_inches": 0.05,
     # Axes
     "axes.linewidth": 0.6,
     "axes.grid": False,
     "axes.spines.top": False,
     "axes.spines.right": False,
     "axes.labelsize": 8,
+    "axes.labelpad": 4.5,
     "axes.titlesize": 9,
     "axes.unicode_minus": False,
     # Ticks
@@ -58,7 +59,7 @@ DEFENSE_ORDER = (
     "trades", "free_at", "class_aware_constrained",
 )
 DEFENSE_LABELS = {
-    "standard": "Standard",
+    "standard": "StdTrain",
     "adv_training": "PGD-AT",
     "constrained_adv": "Constrained",
     "trades": "TRADES",

@@ -16,9 +16,9 @@ if ~exist(outputDir, 'dir')
 end
 
 C = palette();
-[defenses, backbones, risk, pareto] = riskData();
+[defenses, backbones, risk, pareto, admissible] = riskData();
 
-makeFig2(outputDir, defenses, backbones, risk, pareto, C);
+makeFig2(outputDir, defenses, backbones, risk, pareto, admissible, C);
 makeFig3(outputDir, defenses, backbones, risk, pareto, C);
 makeFig5(outputDir, defenses, backbones, C);
 end
@@ -27,7 +27,7 @@ end
 % Fig. 2: Pareto front comparison
 % ======================================================================
 
-function makeFig2(outputDir, defenses, backbones, risk, pareto, C)
+function makeFig2(outputDir, defenses, backbones, risk, pareto, admissible, C)
 fig = figure('Color', C.white, 'Units', 'inches', ...
     'Position', [0.5 0.5 7.2 3.20], ...
     'PaperUnits', 'inches', 'PaperPosition', [0 0 7.2 3.20], ...
@@ -38,8 +38,6 @@ fairAll = reshape(risk(:,4,:), [], 1);
 fairLim = [min(fairAll) max(fairAll)];
 sizeMin = 95;
 sizeMax = 310;
-xLims = [0.888 0.928; 0.902 0.941; 0.895 0.928];
-yLims = [0.815 0.966; 0.585 0.865; 0.835 0.962];
 cmap = fairnessMap(256);
 
 for b = 1:3
@@ -57,24 +55,31 @@ for b = 1:3
     markerSize = sizeMin + (sizeMax - sizeMin) .* normalize01(cost);
 
     for i = 1:numel(defenses)
-        if pareto(i,b)
+        if ~admissible(i,b)
+            edgeColor = C.muted;
+            edgeWidth = 1.2;
+            markerShape = 'o';
+            faceColor = C.white;
+        elseif pareto(i,b)
             edgeColor = C.ink;
             edgeWidth = 1.0;
             markerShape = 'o';
+            faceColor = 'flat';
         else
             edgeColor = C.dominated;
             edgeWidth = 1.9;
             markerShape = 'd';
+            faceColor = 'flat';
         end
         scatter(ax, x(i), y(i), markerSize(i), fair(i), ...
             'Marker', markerShape, ...
-            'MarkerFaceColor', 'flat', ...
+            'MarkerFaceColor', faceColor, ...
             'MarkerEdgeColor', edgeColor, ...
             'LineWidth', edgeWidth, ...
             'MarkerFaceAlpha', 0.94, ...
             'MarkerEdgeAlpha', 1.0);
 
-        if fair(i) > 0.40
+        if admissible(i,b) && fair(i) > 0.40
             labelColor = C.white;
         else
             labelColor = C.ink;
@@ -85,13 +90,19 @@ for b = 1:3
             'VerticalAlignment', 'middle', 'Clipping', 'on');
     end
 
-    dominatedNames = defenses(~pareto(:,b));
-    if isempty(dominatedNames)
-        domText = 'none dominated';
-    else
-        domText = ['dominated: ' strjoin(dominatedNames, ', ')];
+    dominatedNames = defenses(~pareto(:,b) & admissible(:,b));
+    inadmissibleNames = defenses(~admissible(:,b));
+    parts = {};
+    if ~isempty(inadmissibleNames)
+        parts{end+1} = ['inadmissible: ' strjoin(inadmissibleNames, ', ')];
     end
-    text(ax, 0.02, 0.04, sprintf('|P|=%d/6; %s', sum(pareto(:,b)), domText), ...
+    if ~isempty(dominatedNames)
+        parts{end+1} = ['dominated: ' strjoin(dominatedNames, ', ')];
+    end
+    if isempty(parts)
+        parts = {'none dominated'};
+    end
+    text(ax, 0.02, 0.04, sprintf('|P|=%d/6; %s', sum(pareto(:,b)), strjoin(parts, '; ')), ...
         'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 7.2, ...
         'Color', C.muted, 'HorizontalAlignment', 'left', ...
         'VerticalAlignment', 'bottom');
@@ -103,8 +114,10 @@ for b = 1:3
         ylabel(ax, '');
         ax.YTickLabel = {};
     end
-    xlim(ax, xLims(b,:));
-    ylim(ax, yLims(b,:));
+    xPad = max(0.004, 0.08 * (max(x) - min(x)));
+    yPad = max(0.004, 0.08 * (max(y) - min(y)));
+    xlim(ax, [min(x) - xPad, max(x) + xPad]);
+    ylim(ax, [min(y) - yPad, max(y) + yPad]);
     colormap(ax, cmap);
     caxis(ax, fairLim);
 end
@@ -212,9 +225,10 @@ end
 function makeFig5(outputDir, defenses, backbones, C)
 scenarios = {'FGSM\epsilon=.05','PGD\epsilon=.10','C&W L_2','APGD\epsilon=.10','Mask-PGD\epsilon=.10'};
 
-% Values are the two-decimal robust-F1 values reported in the current
-% manuscript figure. The MLP PGD/APGD/C&W/FGSM values are also consistent
-% with the full comparison table up to rounding.
+% NOTE: the values below are the submitted-manuscript snapshot and have not
+% been regenerated from the revision CSVs. Refresh them (or use
+% outputs/figures/risk_surface_heatmap.png, which is generated from the
+% revision outputs) before reusing this figure.
 riskSurf = zeros(6, 5, 3);
 riskSurf(:,:,1) = [ ...
     0.82 0.76 0.50 0.74 0.76
@@ -310,7 +324,11 @@ end
 % Data and style helpers
 % ======================================================================
 
-function [defenses, backbones, risk, pareto] = riskData()
+function [defenses, backbones, risk, pareto, admissible] = riskData()
+% Revision snapshot (official split, ten seeds, PGD alpha=eps/10, 50 steps,
+% tau2=0.90, tau4=0.60). Regenerate from outputs/<backbone>/risk_profile_4d.csv
+% before rebuilding the manuscript figures. Defenses are ordered as below:
+% 1 StdTrain, 2 PGD-AT, 3 Constrained, 4 TRADES, 5 Free AT, 6 Class-Aware.
 defenses = {'Standard','PGD-AT','Constrained','TRADES','Free AT','Class-Aware'};
 backbones = {'MLP','1D-CNN','FT-Transformer'};
 
@@ -318,31 +336,38 @@ risk = zeros(6,4,3);
 pareto = true(6,3);
 
 risk(:,:,1) = [ ...
-    0.9016 0.8278 1.0000 0.0783
-    0.8908 0.9587 0.4200 0.1324
-    0.8948 0.9129 0.4040 0.1096
-    0.9146 0.9505 0.3477 0.2118
-    0.9004 0.8981 0.5997 0.1044
-    0.9247 0.8833 0.4034 0.1580];
+    0.8822 0.8418 1.0000 0.3647
+    0.8564 0.9967 0.2083 0.9687
+    0.8607 0.9637 0.2073 0.7904
+    0.8557 0.9979 0.1658 0.9643
+    0.8755 0.9209 0.3326 0.6045
+    0.8568 0.9897 0.2039 0.9774];
 
 risk(:,:,2) = [ ...
-    0.9059 0.6028 1.0000 0.0753
-    0.9255 0.8395 0.1818 0.2498
-    0.9126 0.7420 0.1816 0.2292
-    0.9139 0.8540 0.1776 0.5571
-    0.9147 0.6744 0.4070 0.1137
-    0.9387 0.8562 0.1811 0.3195];
-pareto(3,2) = false;
+    0.8534 0.8097 1.0000 0.4934
+    0.8278 0.9844 0.1836 0.9631
+    0.8362 0.9435 0.1842 0.8522
+    0.8236 0.9947 0.1554 0.9721
+    0.8502 0.8971 0.3178 0.7666
+    0.8291 0.9689 0.1853 0.9469];
 
 risk(:,:,3) = [ ...
-    0.9073 0.8476 1.0000 0.1024
-    0.9082 0.9540 0.2416 0.1885
-    0.9045 0.9462 0.2412 0.1899
-    0.9256 0.9491 0.2449 0.3143
-    0.8970 0.9187 0.2536 0.1244
-    0.9119 0.9371 0.2408 0.1782];
-pareto(3,3) = false;
-pareto(6,3) = false;
+    0.8851 0.8921 1.0000 0.6687
+    0.8567 0.9975 0.3334 0.9635
+    0.8578 0.9934 0.3347 0.9534
+    0.8542 0.9962 0.2936 0.9571
+    0.8780 0.9431 0.3171 0.8259
+    0.8561 0.9954 0.3316 0.9685];
+
+% Admissibility floors remove StdTrain on every backbone and Free AT on the
+% 1D-CNN (phi2 = 0.8971 < tau2). The Pareto flags are the Eq. 4 front of the
+% remaining admissible candidates.
+admissible = true(6,3);
+admissible(1,:) = false;
+admissible(5,2) = false;
+pareto(:,1) = [false; true(5,1)];
+pareto(:,2) = [false; true(3,1); false; true];
+pareto(:,3) = [false; true(5,1)];
 end
 
 function C = palette()
@@ -402,7 +427,7 @@ end
 function s = abbrev(name)
 switch name
     case 'Standard'
-        s = 'Std';
+        s = 'StdTrain';
     case 'PGD-AT'
         s = 'PGD';
     case 'Constrained'

@@ -109,7 +109,7 @@ def check_backbone(label: str, directory: Path, require_analysis: bool,
     if require_analysis:
         analysis_files = {
             "risk_profile_4d.csv": {"phi1_clean_f1", "phi2_resilience",
-                                    "phi3_cost_eff", "phi4_fairness"},
+                                    "phi3_cost_eff", "phi4_worst_class_recall"},
             "decision_comparators.csv": {"theta_name", "pareto_weighted",
                                          "weighted_no_pareto", "weighted_fixed01",
                                          "topsis_no_pareto", "topsis_pareto"},

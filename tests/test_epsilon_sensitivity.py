@@ -38,5 +38,5 @@ def test_exporter_writes_table_and_figure(tmp_path: Path) -> None:
     tables = root / "tables"
     assert (tables / "epsilon_sensitivity.csv").is_file()
     markdown = (tables / "epsilon_sensitivity.md").read_text(encoding="utf-8")
-    assert "ε=0.1" in markdown and "Standard" in markdown
+    assert "ε=0.1" in markdown and "StdTrain" in markdown
     assert (tables / "epsilon_sensitivity_pgd.png").is_file()

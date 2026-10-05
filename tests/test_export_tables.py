@@ -18,7 +18,7 @@ def _write_backbone(root: Path, subdir: str) -> None:
     pd.DataFrame({
         "model": ["standard", "trades"],
         "phi1_clean_f1": [0.87, 0.85], "phi2_resilience": [0.84, 0.99],
-        "phi3_cost_eff": [1.0, 0.3], "phi4_fairness": [0.36, 0.96],
+        "phi3_cost_eff": [1.0, 0.3], "phi4_worst_class_recall": [0.36, 0.96],
         "phi1_std": [0.01, 0.01], "phi2_std": [0.02, 0.001],
         "phi3_std": [0.0, 0.01], "phi4_std": [0.03, 0.01],
         "is_pareto_optimal": [True, True],

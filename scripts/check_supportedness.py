@@ -16,7 +16,8 @@ from ids_defense_selection.supportedness import (
 )
 
 BACKBONES = {"mlp": "mlp", "cnn1d": "cnn1d", "ft": "ft_transformer"}
-OBJECTIVE_COLUMNS = ["phi1_clean_f1", "phi2_resilience", "phi3_cost_eff", "phi4_fairness"]
+OBJECTIVE_COLUMNS = ["phi1_clean_f1", "phi2_resilience", "phi3_cost_eff",
+                     "phi4_worst_class_recall"]
 
 
 def main() -> int:

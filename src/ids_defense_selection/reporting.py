@@ -14,39 +14,46 @@ import pandas as pd
 from scipy import stats as scipy_stats
 
 from .config import ExperimentConfig, field_group, field_help
-from .style import get_color
+from .style import apply_style, get_color, get_label
 
 
 def plot_metric_curve(df: pd.DataFrame, metric: str, output_path: Path) -> None:
+    apply_style()
     plt.figure(figsize=(8, 5))
     for attack_name in ["fgsm", "pgd"]:
         attack_df = df[df["attack"] == attack_name]
         for model_name in attack_df["model"].unique():
             subset = attack_df[attack_df["model"] == model_name].sort_values("epsilon")
-            plt.plot(subset["epsilon"], subset[metric], marker="o", label=f"{model_name}-{attack_name.upper()}")
-    plt.xlabel("Epsilon")
+            plt.plot(subset["epsilon"], subset[metric], marker="o",
+                     label=f"{get_label(model_name)}-{attack_name.upper()}")
+    plt.xlabel("Epsilon", labelpad=5)
     plt.ylabel(metric.upper())
     plt.title(f"{metric.upper()} under adversarial perturbations")
     plt.grid(True, linestyle="--", alpha=0.4)
-    plt.legend()
+    plt.legend(fontsize=6, ncol=2)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 
 def plot_clean_f1_bar(df: pd.DataFrame, output_path: Path) -> None:
+    apply_style()
     clean = df[df["attack"] == "clean"].groupby("model", as_index=False)["f1"].mean()
-    plt.figure(figsize=(6, 4))
-    plt.bar(clean["model"], clean["f1"], color=["#4472C4", "#ED7D31", "#70AD47"])
+    plt.figure(figsize=(7, 4))
+    plt.bar(clean["model"], clean["f1"], color=[get_color(m) for m in clean["model"]])
+    plt.xticks(range(len(clean)), [get_label(m) for m in clean["model"]],
+               rotation=20, ha="right", fontsize=7)
     plt.ylim(0, 1)
     plt.ylabel("F1")
+    plt.xlabel("Defense", labelpad=5)
     plt.title("Clean-set F1 comparison across training strategies")
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 
 def plot_transfer_heatmap(df: pd.DataFrame, output_path: Path) -> None:
+    apply_style()
     if df.empty:
         plt.figure(figsize=(6, 4))
         plt.text(0.5, 0.5, "No transfer results for selected filter", ha="center", va="center")
@@ -57,17 +64,18 @@ def plot_transfer_heatmap(df: pd.DataFrame, output_path: Path) -> None:
         return
 
     pivot = df.pivot(index="source_model", columns="target_model", values="f1")
-    row_labels = list(pivot.index)
-    col_labels = list(pivot.columns)
+    row_labels = [get_label(name) for name in pivot.index]
+    col_labels = [get_label(name) for name in pivot.columns]
     matrix = pivot.to_numpy()
 
-    fig_width = max(7, 1.25 * len(col_labels) + 2)
+    fig_width = max(7, 1.45 * len(col_labels) + 2)
     fig_height = max(5, 1.0 * len(row_labels) + 2)
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     im = ax.imshow(matrix, cmap="YlOrRd", vmin=matrix.min(), vmax=matrix.max())
-    ax.set_xticks(np.arange(len(col_labels)), labels=col_labels)
+    ax.set_xticks(np.arange(len(col_labels)), labels=col_labels,
+                  rotation=30, ha="right", fontsize=7)
     ax.set_yticks(np.arange(len(row_labels)), labels=row_labels)
-    ax.set_xlabel("Target model")
+    ax.set_xlabel("Target model", labelpad=5)
     ax.set_ylabel("Source model")
     ax.set_title("Transfer-attack F1 heatmap")
     for row_idx in range(matrix.shape[0]):
@@ -75,26 +83,28 @@ def plot_transfer_heatmap(df: pd.DataFrame, output_path: Path) -> None:
             ax.text(col_idx, row_idx, f"{matrix[row_idx, col_idx]:.3f}", ha="center", va="center", color="black")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 
 def plot_ratio_ablation(df: pd.DataFrame, output_path: Path) -> None:
+    apply_style()
     plot_df = df.sort_values("ratio")
     plt.figure(figsize=(7, 5))
     plt.plot(plot_df["ratio"], plot_df["clean_f1"], marker="o", label="Clean F1")
     plt.plot(plot_df["ratio"], plot_df["robust_f1"], marker="s", label="Robust F1")
-    plt.xlabel("Sensitivity top ratio")
+    plt.xlabel("Sensitivity top ratio", labelpad=5)
     plt.ylabel("F1")
     plt.title("Constrained adversarial training ratio ablation")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 
 def plot_efficiency_tradeoff(efficiency_df: pd.DataFrame, result_df: pd.DataFrame, output_path: Path) -> None:
+    apply_style()
     robust_df = result_df[(result_df["attack"] == "pgd") & (np.isclose(result_df["epsilon"], 0.1))][["model", "f1"]]
     robust_df = robust_df.rename(columns={"f1": "robust_f1"})
     clean_df = result_df[result_df["attack"] == "clean"][["model", "f1"]].rename(columns={"f1": "clean_f1"})
@@ -110,17 +120,17 @@ def plot_efficiency_tradeoff(efficiency_df: pd.DataFrame, result_df: pd.DataFram
             alpha=0.9,
         )
         plt.annotate(
-            f"{row.model}\nclean={row.clean_f1:.3f}",
+            f"{get_label(row.model)}\nclean={row.clean_f1:.3f}",
             (row.train_seconds, row.robust_f1),
             xytext=(6, 6),
             textcoords="offset points",
         )
-    plt.xlabel("Training time (s)")
+    plt.xlabel("Training time (s)", labelpad=5)
     plt.ylabel("Robust F1 under PGD, ε=0.10")
     plt.title("Robustness-efficiency trade-off")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 

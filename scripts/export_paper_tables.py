@@ -28,7 +28,7 @@ OBJECTIVES = (
     ("phi1_clean_f1", "phi1_std", r"$\phi_1$ Clean F1"),
     ("phi2_resilience", "phi2_std", r"$\phi_2$ Resilience"),
     ("phi3_cost_eff", "phi3_std", r"$\phi_3$ Cost efficiency"),
-    ("phi4_fairness", "phi4_std", r"$\phi_4$ Worst-class recall"),
+    ("phi4_worst_class_recall", "phi4_std", r"$\phi_4$ Worst-class recall"),
 )
 CANONICAL_PRESETS = ("Robust", "Balanced", "Clean", "Cost")
 

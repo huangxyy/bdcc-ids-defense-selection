@@ -239,6 +239,7 @@ def build_cicids_features(train_df: pd.DataFrame, test_df: pd.DataFrame) -> tupl
 
 
 def plot_family_recall_drop(df: pd.DataFrame, output_path: Path) -> None:
+    idsds.style.apply_style()
     families = [family for family in df["attack_family"].unique() if family != "BENIGN"]
     models = list(df["model"].unique())
     x = np.arange(len(families))
@@ -247,13 +248,15 @@ def plot_family_recall_drop(df: pd.DataFrame, output_path: Path) -> None:
     plt.figure(figsize=(10, 5))
     for idx, model in enumerate(models):
         subset = df[df["model"] == model].set_index("attack_family").reindex(families)
-        plt.bar(x + idx * width - width, subset["recall_drop"], width=width, label=model)
-    plt.xticks(x, families, rotation=20)
+        plt.bar(x + idx * width - width, subset["recall_drop"], width=width,
+                label=idsds.style.get_label(model))
+    plt.xticks(x, families, rotation=20, ha="right")
+    plt.xlabel("Attack family", labelpad=5)
     plt.ylabel("Recall drop")
     plt.title("Recall drop by attack family under PGD")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path, dpi=200)
+    plt.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close()
 
 

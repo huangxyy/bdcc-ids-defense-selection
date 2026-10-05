@@ -61,7 +61,7 @@ uncertainty-versus-point-estimate difference is FT TRADES.
 
 | Defense | phi1 clean F1 | phi2 resilience | phi3 cost efficiency | phi4 worst-class recall | Pareto (Eq. 4) | Pareto (point) | Admissible | Supported |
 |---|---|---|---|---|---|---|---|---|
-| Standard | 0.8822 +/- 0.0050 | 0.8418 +/- 0.0102 | 1.0000 +/- 0.0000 | 0.3647 +/- 0.0154 | no | no | no | - |
+| StdTrain | 0.8822 +/- 0.0050 | 0.8418 +/- 0.0102 | 1.0000 +/- 0.0000 | 0.3647 +/- 0.0154 | no | no | no | - |
 | PGD-AT | 0.8564 +/- 0.0008 | 0.9967 +/- 0.0011 | 0.2083 +/- 0.0086 | 0.9687 +/- 0.0058 | yes | yes | yes | yes |
 | Constrained | 0.8607 +/- 0.0027 | 0.9637 +/- 0.0210 | 0.2073 +/- 0.0055 | 0.7904 +/- 0.1286 | yes | yes | yes | **no** |
 | TRADES | 0.8557 +/- 0.0002 | 0.9979 +/- 0.0004 | 0.1658 +/- 0.0055 | 0.9643 +/- 0.0058 | yes | yes | yes | yes |
@@ -72,7 +72,7 @@ uncertainty-versus-point-estimate difference is FT TRADES.
 
 | Defense | phi1 clean F1 | phi2 resilience | phi3 cost efficiency | phi4 worst-class recall | Pareto (Eq. 4) | Pareto (point) | Admissible | Supported |
 |---|---|---|---|---|---|---|---|---|
-| Standard | 0.8534 +/- 0.0101 | 0.8097 +/- 0.0584 | 1.0000 +/- 0.0000 | 0.4934 +/- 0.1529 | no | no | no | - |
+| StdTrain | 0.8534 +/- 0.0101 | 0.8097 +/- 0.0584 | 1.0000 +/- 0.0000 | 0.4934 +/- 0.1529 | no | no | no | - |
 | PGD-AT | 0.8278 +/- 0.0042 | 0.9844 +/- 0.0110 | 0.1836 +/- 0.0094 | 0.9631 +/- 0.0174 | yes | yes | yes | yes |
 | Constrained | 0.8362 +/- 0.0087 | 0.9435 +/- 0.0326 | 0.1842 +/- 0.0058 | 0.8522 +/- 0.0936 | yes | yes | yes | yes |
 | TRADES | 0.8236 +/- 0.0018 | 0.9947 +/- 0.0042 | 0.1554 +/- 0.0137 | 0.9721 +/- 0.0055 | yes | yes | yes | yes |
@@ -83,7 +83,7 @@ uncertainty-versus-point-estimate difference is FT TRADES.
 
 | Defense | phi1 clean F1 | phi2 resilience | phi3 cost efficiency | phi4 worst-class recall | Pareto (Eq. 4) | Pareto (point) | Admissible | Supported |
 |---|---|---|---|---|---|---|---|---|
-| Standard | 0.8851 +/- 0.0081 | 0.8921 +/- 0.0278 | 1.0000 +/- 0.0000 | 0.6687 +/- 0.1301 | no | no | no | - |
+| StdTrain | 0.8851 +/- 0.0081 | 0.8921 +/- 0.0278 | 1.0000 +/- 0.0000 | 0.6687 +/- 0.1301 | no | no | no | - |
 | PGD-AT | 0.8567 +/- 0.0017 | 0.9975 +/- 0.0019 | 0.3334 +/- 0.0037 | 0.9635 +/- 0.0165 | yes | yes | yes | yes |
 | Constrained | 0.8578 +/- 0.0051 | 0.9934 +/- 0.0061 | 0.3347 +/- 0.0040 | 0.9534 +/- 0.0297 | yes | yes | yes | yes |
 | TRADES | 0.8542 +/- 0.0014 | 0.9962 +/- 0.0033 | 0.2936 +/- 0.0038 | 0.9571 +/- 0.0397 | yes | **no** | yes | **no** |
@@ -93,11 +93,11 @@ uncertainty-versus-point-estimate difference is FT TRADES.
 Notes:
 
 - `phi2 = 1 - ASR` for PGD at epsilon = 0.10; `phi3` is the standard-training cost divided by the
-  defense's training cost, so Standard is 1.0 by construction (a structural property, not an
+  defense's training cost, so StdTrain is 1.0 by construction (a structural property, not an
   empirical finding).
 - The per-cell CSVs are `outputs/tables/table3_mlp.csv`, `table4_cnn1d.csv`, `table5_ft.csv`.
 - The uncertainty-aware front keeps all six candidates on all three backbones; only FT TRADES
-  falls off the point-estimate front, and the admissibility floors remove Standard everywhere
+  falls off the point-estimate front, and the admissibility floors remove StdTrain everywhere
   (and Free AT on the 1D-CNN because its phi2 = 0.8971 is below tau2 = 0.90).
 
 ---
@@ -131,7 +131,7 @@ Source: `outputs/tables/table6_preference_selection.csv` and
 | Preference: Clean | Free AT | Constrained | Free AT |
 | Preference: Cost | Free AT | PGD-AT | Constrained |
 
-Single-metric rankings (Standard excluded because it is inadmissible) differ from the
+Single-metric rankings (StdTrain excluded because it is inadmissible) differ from the
 preference-aware selections, which is the behavioral difference the framework is designed to
 capture. Source: `outputs/tables/table7_single_vs_preference.csv`.
 
@@ -146,7 +146,7 @@ confidence intervals. Statistical significance and practical relevance are repor
 
 | Comparison | mean diff | Cohen's d_z | 95% CI | p (Holm) |
 |---|---|---|---|---|
-| Constrained vs Standard | +0.0690 | +4.69 | [+0.0597, +0.0770] | 0.0000 |
+| Constrained vs StdTrain | +0.0690 | +4.69 | [+0.0597, +0.0770] | 0.0000 |
 | Free AT vs PGD-AT | -0.0325 | -3.98 | [-0.0371, -0.0275] | 0.0000 |
 | Constrained vs PGD-AT | -0.0184 | -1.49 | [-0.0262, -0.0114] | 0.0033 |
 | Class-Aware vs Constrained | +0.0146 | +1.19 | [+0.0077, +0.0223] | 0.0089 |
@@ -156,7 +156,7 @@ confidence intervals. Statistical significance and practical relevance are repor
 
 | Comparison | mean diff | Cohen's d_z | 95% CI | p (Holm) |
 |---|---|---|---|---|
-| Constrained vs Standard | +0.0802 | +2.45 | [+0.0602, +0.0992] | 0.0001 |
+| Constrained vs StdTrain | +0.0802 | +2.45 | [+0.0602, +0.0992] | 0.0001 |
 | Free AT vs PGD-AT | -0.0341 | -1.64 | [-0.0475, -0.0231] | 0.0023 |
 | Constrained vs PGD-AT | -0.0172 | -1.51 | [-0.0239, -0.0105] | 0.0030 |
 | Class-Aware vs Constrained | +0.0100 | +0.76 | [+0.0026, +0.0182] | 0.0792 |
@@ -166,7 +166,7 @@ confidence intervals. Statistical significance and practical relevance are repor
 
 | Comparison | mean diff | Cohen's d_z | 95% CI | p (Holm) |
 |---|---|---|---|---|
-| Constrained vs Standard | +0.0433 | +2.63 | [+0.0343, +0.0536] | 0.0001 |
+| Constrained vs StdTrain | +0.0433 | +2.63 | [+0.0343, +0.0536] | 0.0001 |
 | TRADES vs PGD-AT | -0.0033 | -1.41 | [-0.0047, -0.0020] | 0.0064 |
 | Free AT vs PGD-AT | -0.0150 | -0.97 | [-0.0247, -0.0066] | 0.0392 |
 | Constrained vs PGD-AT | -0.0014 | -0.64 | [-0.0026, -0.0001] | 0.1445 |
@@ -184,11 +184,11 @@ third-decimal significance claims.
 |---|---|---|
 | Adaptive attacks | Three seeds per backbone; restart PGD, gradient-free NES, complement attacks | No gradient masking: zero-gradient fraction ~ 0 and NES never beats restart PGD. CNN is the most variable backbone (TRADES 2.40% +/- 2.09 restart-PGD ASR). |
 | Cross-backbone transfer | Four seeds, 5,000 test rows, 10-step PGD | Clean-model transfer reaches 1.2-10.1% ASR; between adversarially trained models at most 0.4%. |
-| Epsilon sensitivity | Ten seeds, epsilon in {0.02, 0.05, 0.10, 0.20}, PGD and APGD | ASR grows smoothly with the budget; TRADES stays <= 2.85% on every backbone at epsilon = 0.20, while the CNN Standard model reaches 64.35%. C&W is epsilon-independent by construction. |
-| CIC-IDS2017 cross-dataset | MLP, ten seeds, family-quota sampling of the five daily captures | Top of the ranking is preserved: PGD-AT 0.28% +/- 0.03 and TRADES 0.29% +/- 0.08 ASR at epsilon = 0.10 vs Standard 13.74% +/- 2.15. Mid-tier ordering is dataset-dependent; absolute F1 values are not comparable to UNSW-NB15. |
+| Epsilon sensitivity | Ten seeds, epsilon in {0.02, 0.05, 0.10, 0.20}, PGD and APGD | ASR grows smoothly with the budget; TRADES stays <= 2.85% on every backbone at epsilon = 0.20, while the CNN StdTrain model reaches 64.35%. C&W is epsilon-independent by construction. |
+| CIC-IDS2017 cross-dataset | MLP, ten seeds, family-quota sampling of the five daily captures | Top of the ranking is preserved: PGD-AT 0.28% +/- 0.03 and TRADES 0.29% +/- 0.08 ASR at epsilon = 0.10 vs StdTrain 13.74% +/- 2.15. Mid-tier ordering is dataset-dependent; absolute F1 values are not comparable to UNSW-NB15. |
 | FT capacity ablation | medium (64/4/3/128, 3 seeds) and large (128/8/4/256, 1-2 seeds) | The point-estimate contraction does not persist: medium and large keep 6/6 candidates on both fronts, so the submitted contraction is not an architecture-level invariant. |
 | Mean vs median aggregation | Rebuild all objectives per seed under both aggregations | MLP unchanged; 1D-CNN robustness preference flips TRADES -> PGD-AT; FT front loses Constrained and the Clean/Cost picks flip to PGD-AT. Fragile decisions are reported as fragile. |
-| Bootstrap front stability | 5,000 seed resamples, thresholds applied inside each resample | PGD-AT has >= 0.98 front-membership probability on every backbone; TRADES is stable on MLP/1D-CNN (>= 0.998) but only 0.25 on FT; Free AT is fragile (0.43-0.57). The FT Standard model crosses the tau2 floor in 17% of resamples. |
+| Bootstrap front stability | 5,000 seed resamples, thresholds applied inside each resample | PGD-AT has >= 0.98 front-membership probability on every backbone; TRADES is stable on MLP/1D-CNN (>= 0.998) but only 0.25 on FT; Free AT is fragile (0.43-0.57). The FT StdTrain model crosses the tau2 floor in 17% of resamples. |
 | Supportedness (LP) | Exact supporting-weights test per backbone | MLP Constrained (margin -0.00324) and FT TRADES (-0.00126) are unsupported: no non-negative theta reaches them under the weighted sum. Augmented weighted Tchebycheff with rho = 0.1 reaches both. |
 | Environment replication | FT paper configuration, same seed, second server (different driver/environment) | phi1 and phi2 agree to <= 4 x 10^-4; the undefended model's worst-class recall differs by 0.088 (smallest attack category); cost ratios differ by 1-2% and are interpreted within a run only. |
 | Long-budget ablation | 20 + 16 epochs instead of 10 + 8 | MLP conclusions are stable (ASR changes <= 1.04 pp); the 1D-CNN ordering flips (TRADES 0.53% -> 2.60%, PGD-AT 1.81%), so CNN rankings are budget-sensitive. |
@@ -196,13 +196,96 @@ third-decimal significance claims.
 ![PGD sensitivity to the perturbation budget](figures/epsilon_sensitivity_pgd.png)
 
 *Attack success rate versus the perturbation budget for PGD; TRADES stays lowest on every
-backbone, while the 1D-CNN Standard model degrades fastest. Generated by
+backbone, while the 1D-CNN StdTrain model degrades fastest. Generated by
 `scripts/export_epsilon_sensitivity.py --attack pgd`.*
 
 Supporting files: `outputs/tables/bootstrap_front_stability.csv`,
 `bootstrap_dominance_pairs.csv`, `aggregation_robustness.csv`, `environment_replication.csv`,
 `cross_dataset_comparison_10seed.csv`, `capacity_ablation.csv`, `capacity_large_2seed.csv`,
 `adaptive_3seed.csv`, `longbudget_comparison.csv`, and `<backbone>/supportedness.csv`.
+
+---
+
+## 7. Coverage and data-quality notes
+
+### Full-test attack coverage (MLP)
+
+The 1D-CNN and FT-Transformer main runs write `full_test_attack_{raw,mean,std}.csv`
+(PGD at epsilon = 0.10, all 82,332 test records, ten seeds). The MLP pipeline historically
+evaluated only the 20,000-row subset, so the revision closes that gap from the saved checkpoints,
+without retraining, using the identical protocol:
+
+```bash
+for s in 7 13 21 42 100 11 23 37 59 89; do
+  uv run python scripts/evaluate_checkpoints.py \
+    --checkpoint outputs/mlp/checkpoints/seed$s \
+    --output-dir outputs/mlp_fulltest/seed$s --device cuda \
+    --eval-attack-rows 2000 --epsilon-list 0.10 \
+    --eval-pgd-alpha-ratio 0.10 --eval-pgd-steps 50 \
+    --full-test-attack-settings pgd:0.10 --full-test-attack-rows 0
+done
+```
+
+Concatenate the per-seed `full_test_attack_raw.csv` files, then aggregate over seeds
+(the files already carry `seed`, `model`, `attack`, `epsilon` and `test_rows`):
+
+```python
+import glob
+import pandas as pd
+
+raw = pd.concat([pd.read_csv(p) for p in sorted(glob.glob("outputs/mlp_fulltest/seed*/full_test_attack_raw.csv"))])
+metrics = ["accuracy", "precision", "recall", "f1", "auc", "attack_success_rate"]
+keys = ["model", "subset", "attack", "epsilon", "test_rows"]
+raw.to_csv("outputs/mlp/full_test_attack_raw.csv", index=False)
+raw.groupby(keys, as_index=False)[metrics].mean().to_csv("outputs/mlp/full_test_attack_mean.csv", index=False)
+raw.groupby(keys, as_index=False)[metrics].std().fillna(0.0).to_csv("outputs/mlp/full_test_attack_std.csv", index=False)
+```
+
+The evaluation-only loader also falls back to the repository `data/` directory when a checkpoint
+records an absolute path from the machine that trained it, so checkpoints stay portable across
+servers.
+
+### Sensitivity-ratio ablation is MLP-only
+
+The sensitivity-mask ratio ablation (`ratio_ablation_raw/mean.csv`, ratios 0.2 / 0.3 / 0.4) is
+produced by the MLP pipeline only; the 1D-CNN and FT-Transformer runs do not execute it. The
+MLP sweep selects 8 / 12 / 16 of the 39 continuous features and shows the expected trade-off:
+
+| Mask ratio | Features | Clean F1 | Robust F1 | ASR |
+|---|---|---|---|---|
+| 0.2 | 8 | 0.8638 | 0.8111 | 7.46% |
+| 0.3 | 12 | 0.8607 | 0.8360 | 3.62% |
+| 0.4 | 16 | 0.8578 | 0.8501 | 1.21% |
+
+The paper should state that this ablation is diagnostic and MLP-only (the constrained and
+class-aware defenses cover the mask mechanism on the other backbones); running it for all three
+backbones is left as future work.
+
+### Attack-validity diagnostics: the 12.69 maximum displacement
+
+The validity tables (`attack_validity_{raw,mean}.csv`) report
+`max_numeric_abs_delta = 12.6859` (identical for every backbone, defense and attack) and
+`boundary_clip_ratio` between 7% and 12%. These are properties of the constraint handling, not
+of a failing attack:
+
+- Perturbations are restricted to the 39 continuous features and every attacked row keeps its
+  one-hot block: `numeric_valid_rate = protected_integrity_rate = overall_validity_rate = 1.0`.
+- `clamp_numeric` prioritises the training-box constraint over the epsilon-ball. In the test
+  partition, 72 of 82,332 rows (0.087%) have at least one continuous feature outside the
+  training [min, max] box. The largest excursion is 42.80 standardized units in the full test
+  set (`djit`); within the 20,000-row evaluation subset the largest excursion is exactly
+  **12.6859**, which is therefore the reported maximum displacement. Projecting such a row back
+  into the box can move it farther than epsilon by construction.
+- The average displacement stays within the attack budget:
+  `mean_numeric_abs_delta` is about 0.033 for FGSM (epsilon = 0.05) and 0.067 for PGD
+  (epsilon = 0.10) in standardized units.
+- `boundary_clip_ratio` is the share of attacked rows that touch at least one box boundary
+  (7-12%, depending on backbone and defense).
+
+Implication for the manuscript: attack success rates are constrained **feature-space**
+indicators; the epsilon ball holds for the typical row, while the box projection takes priority
+for the rare out-of-range rows. This is consistent with the threat model and is not evidence of
+packet-level exploitability.
 
 ---
 

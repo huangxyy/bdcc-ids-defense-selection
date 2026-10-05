@@ -24,7 +24,7 @@
 flowchart LR
     A["UNSW-NB15 官方划分<br/>训练 175,341 / 测试 82,332"] --> B["特征流水线<br/>39 连续 + 155 one-hot"]
     B --> C["三个骨干<br/>MLP / 1D-CNN / FT-Transformer"]
-    C --> D["六种防御<br/>Standard, PGD-AT, Constrained, TRADES, Free AT, Class-Aware"]
+    C --> D["六种防御<br/>StdTrain, PGD-AT, Constrained, TRADES, Free AT, Class-Aware"]
     D --> E["约束化攻击<br/>FGSM, PGD, C&W, APGD, 自适应攻击套件"]
     E --> F["四个目标<br/>干净 F1, 韧性, 成本效率, 最差类别召回"]
     F --> G["帕累托过滤<br/>不确定性感知支配, Eq. (2)-(4)"]
@@ -44,7 +44,7 @@ flowchart LR
 
 | 防御 | MLP | 1D-CNN | FT-Transformer |
 |---|---:|---:|---:|
-| Standard（不设防） | 15.82 | 19.03 | 10.79 |
+| StdTrain（不设防） | 15.82 | 19.03 | 10.79 |
 | PGD-AT | 0.33 | 1.56 | **0.25** |
 | Constrained AT | 3.63 | 5.65 | 0.66 |
 | TRADES | **0.21** | **0.53** | 0.38 |
@@ -64,8 +64,9 @@ flowchart LR
 
 ![三个骨干的帕累托前沿对比](docs/figures/pareto_front_comparison.png)
 
-*四维画像在（干净 F1, 韧性）平面上的投影；星号为帕累托前沿候选。由
-`scripts/pareto_selection.py` 生成。*
+*四维画像在（干净 F1, 韧性）平面上的投影。星号表示可准入的不确定性感知帕累托前沿；
+空心标记（三骨干的 StdTrain，以及 1D-CNN 的 Free AT）为保留展示、但被准入门槛淘汰的候选。
+由 `scripts/pareto_selection.py` 生成。*
 
 相比投稿版，修订版新增了以下内容：
 
@@ -282,10 +283,14 @@ bdcc-ids-defense-selection/
 | 容量 / 长预算消融 | `run_ft_transformer.py --ft-capacity ...`、`--baseline-epochs 20 --adv-epochs 16` |
 | 跨骨干迁移攻击 | `evaluate_cross_backbone_transfer.py`、`transfer_from_checkpoints.py` |
 | 自适应攻击 | `run_* --adaptive-eval`、`evaluate_checkpoints.py --adaptive-eval` |
+| 全测试集攻击 | `run_cnn1d.py` / `run_ft_transformer.py`（原生）；MLP 用 `evaluate_checkpoints.py --full-test-attack-rows 0` 补跑 |
+| 敏感度比例消融（仅 MLP） | `run_mlp.py`（`ratio_ablation_*`） |
 
 其余脚本（`sweep_hyperparameters.py`、`analyze_extended.py`）实现的是附加的敏感性分析。
-`make_figures_matlab.m` 仅作参考保留（论文图表使用该脚本的样式，但其中的数据是硬编码的，
-不属于可复现流水线）；可复现的图请使用 Python 流程写入的 `outputs/figures/`。
+`make_figures_matlab.m` 仅作参考保留（论文图表使用该脚本的样式）。它的 `riskData()` 已换成
+修订版快照（官方划分、10 seeds、准入阈值），并为不可准入候选加了空心标记，用于图 2/图 3；
+其中的图 5 风险曲面仍是投稿版数据，复用前需要更新。可复现的图请使用 Python 流程写入的
+`outputs/figures/`。
 
 ---
 
@@ -480,7 +485,7 @@ phi3 的训练成本比值。
 
 | 防御 | 训练时攻击 | 掩码 | 额外设置 |
 |---|---|---|---|
-| Standard | 无 | - | - |
+| StdTrain | 无 | - | - |
 | PGD-AT | PGD | 全部 39 个连续特征 | - |
 | Constrained | PGD | 最敏感的 top-30% 特征 | - |
 | TRADES | KL 上的 PGD | 全部连续特征 | beta = 6.0 |
@@ -620,6 +625,11 @@ uv run ruff check      # 静态检查（含未定义名称）
 one-hot 的宽度取决于**训练**划分中包含多少类别取值，因此它是划分本身的属性，而非固定常数。使用官方
 划分时，本代码会产生 **194 个变换后特征（39 个连续 + 155 个 one-hot）**。投稿版论文报告的是 190，
 对应投稿实验所使用的反向划分。`smoke_test.py` 会打印实际得到的数值，因此两者不会被悄悄混淆。
+
+扰动只作用于 39 个连续特征、并被限制在训练集的 `[min, max]` 盒内。盒约束优先于 epsilon 球，
+因此极少数取值落在训练范围之外的测试样本的位移可能超过 epsilon；`attack_validity_*.csv` 用
+`max_numeric_abs_delta` 与 `boundary_clip_ratio` 量化了这一现象，完整解释见
+[docs/results.md](docs/results.md)。
 
 ---
 

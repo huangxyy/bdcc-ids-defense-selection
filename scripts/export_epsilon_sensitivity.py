@@ -114,7 +114,7 @@ def main() -> int:
             axis.plot(cell["epsilon"], 100 * cell["asr_mean"],
                       marker="o", markersize=3, linewidth=1.0,
                       color=FS.get_color(model), label=FS.get_label(model))
-        axis.set_xlabel("ε", fontsize=8)
+        axis.set_xlabel("ε", fontsize=8, labelpad=5)
         axis.set_ylabel("ASR (%)", fontsize=8)
         axis.set_title(label, fontsize=9, pad=4)
         axis.tick_params(labelsize=7)

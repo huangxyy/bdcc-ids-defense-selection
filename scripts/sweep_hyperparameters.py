@@ -160,7 +160,8 @@ def main():
     print("\n=== Class-aware weight sweep ===")
     ca_df = sweep_class_aware_weight(train_loader, baseline, eval_x, eval_y, device, config, numeric_mask_t, mins_t, maxs_t, metadata)
     ca_df.to_csv(out_dir / "class_aware_weight_sweep.csv", index=False)
-    plot_sweep(ca_df, "class_aware_weight", "类别感知权重 w", out_dir / "class_aware_weight_sweep.png")
+    plot_sweep(ca_df, "class_aware_weight", "Class-aware minority weight",
+               out_dir / "class_aware_weight_sweep.png")
     print(f"Saved: {out_dir / 'class_aware_weight_sweep.png'}")
 
     ca_summary = ca_df.groupby("value").agg(

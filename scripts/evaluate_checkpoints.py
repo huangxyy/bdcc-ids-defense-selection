@@ -23,6 +23,7 @@ from dataclasses import fields
 from pathlib import Path
 
 from ids_defense_selection import (
+    DEFAULT_DATA_DIR,
     EvaluationSet,
     ExperimentConfig,
     build_features,
@@ -61,10 +62,29 @@ def _git_revision() -> str:
         return "unknown"
 
 
+def _is_readable_file(value) -> bool:
+    """``Path.is_file`` raises PermissionError for unreachable prefixes."""
+    try:
+        return Path(str(value)).is_file()
+    except OSError:
+        return False
+
+
 def build_eval_config(bundle: dict, args) -> ExperimentConfig:
     """Training config from the bundle, with only the requested eval overrides."""
     known = {field.name for field in fields(ExperimentConfig)}
     flat = {key: value for key, value in bundle["config"].items() if key in known}
+    # Checkpoints record the absolute data paths of the machine that trained them.
+    # Fall back to the repository copy when those paths do not exist here, so a
+    # checkpoint stays usable after the run directory is synced to another host.
+    for key, fallback in (("train_path", DEFAULT_DATA_DIR / "train.csv"),
+                          ("test_path", DEFAULT_DATA_DIR / "test.csv")):
+        value = flat.get(key)
+        if not value or not _is_readable_file(value):
+            if value:
+                print(f"[eval-only] {key}={value} is not available; using {fallback}",
+                      flush=True)
+            flat[key] = str(fallback)
     overrides = {
         "output_dir": args.output_dir,
         "device": args.device,
@@ -79,6 +99,8 @@ def build_eval_config(bundle: dict, args) -> ExperimentConfig:
         "adaptive_epsilon": args.adaptive_epsilon,
         "full_test_attack_settings": args.full_test_attack_settings,
         "full_test_attack_rows": args.full_test_attack_rows,
+        "train_path": args.train_path,
+        "test_path": args.test_path,
     }
     overrides = {key: value for key, value in overrides.items() if value is not None}
     return ExperimentConfig(**{**flat, **overrides})
@@ -103,6 +125,10 @@ def main() -> int:
     parser.add_argument("--adaptive-epsilon", type=float, default=None)
     parser.add_argument("--full-test-attack-settings", type=_parse_attack_settings, default=None)
     parser.add_argument("--full-test-attack-rows", type=int, default=None)
+    parser.add_argument("--train-path", default=None,
+                        help="override the data path recorded in the checkpoint")
+    parser.add_argument("--test-path", default=None,
+                        help="override the data path recorded in the checkpoint")
     args = parser.parse_args()
 
     bundle = load_checkpoint(args.checkpoint)

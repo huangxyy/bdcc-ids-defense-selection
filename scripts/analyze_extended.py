@@ -189,12 +189,12 @@ def plot_epsilon_sweep(df, output_path):
         for j, name in enumerate(MODEL_NAMES):
             sub = df[df["model"] == name].sort_values("epsilon")
             ax.plot(sub["epsilon"], sub[metric], marker="o", color=COLORS[j], label=MODEL_LABELS[name], linewidth=2, markersize=5)
-        ax.set_xlabel("PGD 扰动强度 ε", fontsize=12)
+        ax.set_xlabel("PGD perturbation strength ε", fontsize=12)
         ax.set_ylabel(ylabel, fontsize=12)
         ax.legend(fontsize=9)
         ax.grid(alpha=0.3)
-    axes[0].set_title("F1 vs 扰动强度（细粒度扫描）", fontsize=13)
-    axes[1].set_title("ASR vs 扰动强度（细粒度扫描）", fontsize=13)
+    axes[0].set_title("F1 vs perturbation strength (fine sweep)", fontsize=13)
+    axes[1].set_title("ASR vs perturbation strength (fine sweep)", fontsize=13)
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
@@ -202,8 +202,8 @@ def plot_epsilon_sweep(df, output_path):
 
 def plot_roc(roc_data, eval_y, output_path_clean, output_path_attacked):
     for condition, out_path, title in [
-        ("clean", output_path_clean, "ROC 曲线：Clean 条件"),
-        ("attacked", output_path_attacked, "ROC 曲线：PGD ε=0.10 攻击后"),
+        ("clean", output_path_clean, "ROC: clean condition"),
+        ("attacked", output_path_attacked, "ROC: after PGD ε=0.10 attack"),
     ]:
         fig, ax = plt.subplots(figsize=(8, 7))
         for j, name in enumerate(MODEL_NAMES):
@@ -229,8 +229,8 @@ def plot_gradient_masking(grad_df, output_path):
                   color=COLORS[:len(grad_df)], edgecolor="white", capsize=4)
     ax.set_xticks(x)
     ax.set_xticklabels([MODEL_LABELS[m] for m in grad_df["model"]], fontsize=10, rotation=15)
-    ax.set_ylabel("输入梯度 L2 范数（均值±标准差）", fontsize=12)
-    ax.set_title("梯度遮蔽检测：各防御模型的输入梯度范数", fontsize=14)
+    ax.set_ylabel("Input-gradient L2 norm (mean ± std)", fontsize=12)
+    ax.set_title("Gradient-masking check: input-gradient norms", fontsize=14)
     ax.grid(axis="y", alpha=0.3)
     for b, v in zip(bars, grad_df["grad_l2_mean"]):
         ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.001, f"{v:.4f}", ha="center", fontsize=9)

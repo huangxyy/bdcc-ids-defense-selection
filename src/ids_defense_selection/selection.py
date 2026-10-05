@@ -636,11 +636,19 @@ def _pareto_front_path(objectives_2d: np.ndarray,
 
 
 def plot_pareto_front_comparison(objectives: dict[str, pd.DataFrame],
-                                 out_path: str) -> None:
-    """One Pareto panel per backbone (MLP, 1D-CNN, FT-Transformer)."""
+                                 out_path: str,
+                                 admissible: dict[str, pd.Series] | None = None) -> None:
+    """One Pareto panel per backbone (MLP, 1D-CNN, FT-Transformer).
+
+    All candidates are shown. Candidates that fail the admissibility floors are
+    drawn with hollow markers and excluded from the Pareto front, so the figure
+    keeps the full six-candidate picture while still reflecting the decision
+    pipeline (an all-in-one legend is placed below the panels).
+    """
     items = list(objectives.items())
-    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 3.0),
+    fig, axes = plt.subplots(1, len(items), figsize=(3.35 * len(items), 3.2),
                              squeeze=False)
+    legend_handles = None
 
     for index, (ax, (key, obj)) in enumerate(zip(axes[0], items)):
         title = f"({chr(ord('a') + index)}) {BACKBONE_LABELS.get(key, key)} Backbone"
@@ -652,7 +660,14 @@ def plot_pareto_front_comparison(objectives: dict[str, pd.DataFrame],
 
         models = obj.index.tolist()
         mat    = obj[["phi1", "phi2", "phi3", "phi4"]].values
-        pareto = is_pareto_optimal(mat)
+        keep = pd.Series(True, index=obj.index)
+        if admissible and key in admissible and len(admissible[key]):
+            keep = admissible[key].reindex(obj.index).fillna(False).astype(bool)
+        kept = obj[keep]
+        pareto = pd.Series(False, index=obj.index)
+        if not kept.empty:
+            pareto.loc[kept.index] = is_pareto_optimal(
+                kept[["phi1", "phi2", "phi3", "phi4"]].values)
 
         # Size proportional to phi3 (cost efficiency)
         phi3 = mat[:, 2]
@@ -663,7 +678,11 @@ def plot_pareto_front_comparison(objectives: dict[str, pd.DataFrame],
             x, y = mat[idx, 0], mat[idx, 1]
             col = FS.get_color(m)
             mk  = FS.get_marker(m)
-            if pareto[idx]:
+            if not keep.iloc[idx]:
+                # Inadmissible candidate: keep the marker visible but hollow.
+                ax.scatter(x, y, s=sizes[idx], facecolors="none", edgecolors=col,
+                           marker=mk, zorder=3, linewidths=1.1, alpha=0.9)
+            elif pareto.iloc[idx]:
                 ax.scatter(x, y, s=sizes[idx], color=col, marker=mk,
                            zorder=4, linewidths=0.8, edgecolors="black")
             else:
@@ -672,32 +691,36 @@ def plot_pareto_front_comparison(objectives: dict[str, pd.DataFrame],
                            alpha=0.6)
 
         # Dashed Pareto frontier line
-        front_pts = _pareto_front_path(mat[:, :2], pareto)
+        front_pts = _pareto_front_path(mat[:, :2], pareto.to_numpy())
         if front_pts is not None and len(front_pts) > 1:
             ax.plot(front_pts[:, 0], front_pts[:, 1],
                     linestyle="--", color="0.3", linewidth=0.8,
                     zorder=2, alpha=0.7)
 
-        ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8)
+        ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8, labelpad=5)
         ax.set_ylabel(r"$\phi_2$ Adversarial Resilience (1$-$ASR)", fontsize=8)
         ax.set_title(title, fontsize=9, pad=4)
 
-        # Legend: defence names
+        # Legend: defence names (collected once, drawn below the panels)
         handles = [
             mpatches.Patch(color=FS.get_color(m), label=FS.get_label(m))
             for m in models
         ]
-        ax.legend(handles=handles, fontsize=6, loc="lower right",
-                  handlelength=1.0, handletextpad=0.4, borderpad=0.4)
+        if legend_handles is None:
+            legend_handles = handles
 
         # Annotation: pareto symbol
         for idx, m in enumerate(models):
-            if pareto[idx]:
+            if pareto.iloc[idx]:
                 ax.annotate("*", (mat[idx, 0], mat[idx, 1]),
                             textcoords="offset points", xytext=(3, 3),
                             fontsize=7, color="black")
 
-    plt.tight_layout(pad=0.8)
+    if legend_handles:
+        fig.legend(handles=legend_handles, loc="lower center", ncol=3,
+                   fontsize=6, handlelength=1.0, handletextpad=0.4,
+                   borderpad=0.4, frameon=True)
+    plt.tight_layout(rect=(0.0, 0.10, 1.0, 1.0), pad=0.8)
     fig.savefig(out_path)
     plt.close(fig)
     print(f"  Saved: {out_path}")
@@ -843,7 +866,7 @@ def plot_epsilon_pareto_evolution(data: dict[str, dict], out_path: str) -> None:
                 ax.plot(front[:, 0], front[:, 1], linestyle=ls,
                         color="0.4", linewidth=0.7, alpha=0.8)
 
-        ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8)
+        ax.set_xlabel(r"$\phi_1$ Clean F1", fontsize=8, labelpad=5)
         ax.set_ylabel(r"$\phi_2$ Adversarial Resilience", fontsize=8)
         ax.set_title(f"({chr(ord('a') + index)}) {label}, PGD", fontsize=9, pad=4)
 
@@ -907,10 +930,10 @@ def plot_theta_sensitivity(objectives: dict[str, pd.DataFrame], out_path: str) -
                     rotation=90)
 
         ax.set_xticks(x)
-        ax.set_xticklabels(theta_names, fontsize=6, rotation=40, ha="right")
+        ax.set_xticklabels(theta_names, fontsize=6, rotation=35, ha="right")
         ax.set_yticks([])
         ax.set_title(title, fontsize=9, pad=4)
-        ax.set_xlabel("Preference Weight Scenario ($\\theta$)", fontsize=7)
+        ax.set_xlabel("Preference Weight Scenario ($\\theta$)", fontsize=7, labelpad=6)
         ax.set_ylim(0, 1.15)
 
         # Legend
@@ -924,6 +947,9 @@ def plot_theta_sensitivity(objectives: dict[str, pd.DataFrame], out_path: str) -
                   ncol=2, handlelength=0.8)
 
     plt.tight_layout(pad=0.8)
+    # Long rotated tick labels otherwise overlap the shared x-label in the
+    # tight three-panel layout; reserve an explicit bottom strip for them.
+    fig.subplots_adjust(bottom=0.42)
     fig.savefig(out_path)
     plt.close(fig)
     print(f"  Saved: {out_path}")
@@ -950,7 +976,7 @@ def write_risk_profile_csv(obj: pd.DataFrame, pareto_mask,
 
     df = obj.copy().reset_index()
     df.columns = ["model", "phi1_clean_f1", "phi2_resilience",
-                  "phi3_cost_eff", "phi4_fairness"]
+                  "phi3_cost_eff", "phi4_worst_class_recall"]
     if stds is not None:
         std_view = stds.reindex(obj.index)[["phi1", "phi2", "phi3", "phi4"]].reset_index(drop=True)
         for source, target in zip(("phi1", "phi2", "phi3", "phi4"),
@@ -1240,8 +1266,11 @@ def main() -> int:
     print("\nGenerating figures...")
     backbone_data = {key: data[key] for key in BACKBONE_LABELS}
 
+    full_objectives = {key: prepared[key]["means"] for key in BACKBONE_LABELS}
+    admissible_masks = {key: prepared[key]["admissible"] for key in BACKBONE_LABELS}
     plot_pareto_front_comparison(
-        objectives, os.path.join(fig_dir, "pareto_front_comparison.png"))
+        full_objectives, os.path.join(fig_dir, "pareto_front_comparison.png"),
+        admissible=admissible_masks)
     plot_risk_surface_heatmap(
         backbone_data, os.path.join(fig_dir, "risk_surface_heatmap.png"))
     plot_epsilon_pareto_evolution(
