@@ -19,7 +19,7 @@
 src/ids_defense_selection/     库:配置、数据、攻击、防御、评测、决策、报告
 scripts/                       入口:_bootstrap + 实验/分析/工具脚本
 tests/                         单元、集成、结构测试
-docs/                          结构说明与本验证指南
+docs/                          结构说明、验证指南与修订版结果快照(docs/results.md)
 data/                          UNSW-NB15 官方划分(随仓库提供)
 outputs/                       实验产物(不入版本库,规范见 outputs/README.md)
 Makefile                       make verify / quick / test / lint / smoke / dry-run
@@ -32,7 +32,7 @@ Makefile                       make verify / quick / test / lint / smoke / dry-r
 | `src/ids_defense_selection/` | 可导入的算法与流程;每个模块都能被 `import` | CLI 参数解析、`sys.exit`、实验目录硬编码 |
 | `scripts/` | 薄入口:参数解析、打印、调用库、写 `outputs/` | 新的算法逻辑(应先加进 `src/` 并写测试) |
 | `tests/` | 单元/集成/结构回归;使用合成数据,CPU 数秒跑完 | 依赖真实训练时长或 GPU 的测试 |
-| `docs/` | 结构、验证、实验产物映射 | 会随代码漂移的重复文档(定稿后同步 README) |
+| `docs/` | 结构、验证、实验产物映射、修订版结果快照 | 会随代码漂移的重复文档(定稿后同步 README) |
 | `data/` | 官方划分的 `train.csv` / `test.csv`;CIC-IDS2017 单独下载 | 中间缓存、实验产物 |
 | `outputs/` | 训练、评测、决策、图表产物 | 手工编辑的源文件;除 `README.md` 外均被 gitignore |
 

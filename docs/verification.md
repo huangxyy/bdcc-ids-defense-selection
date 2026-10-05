@@ -1,6 +1,6 @@
 # 验证指南
 
-验证分八层,从秒级到小时级逐层加深。提交前至少跑完第 1–6 层(即 `make verify`),
+验证分十一层,从秒级到小时级逐层加深。提交前至少跑完第 1–6 层(即 `make verify`),
 正式实验跑完后加跑第 8 层。
 
 ## 0. 环境
@@ -14,7 +14,7 @@ uv sync --group dev      # 首次执行;国内服务器可用 scripts/setup_serv
 ```bash
 make help                # 列出所有目标
 make verify              # 全量:数据 + lint + 测试 + 冒烟 + dry-run
-make quick               # 快检:数据 + lint + 测试(约 10 秒)
+make quick               # 快检:数据 + lint + 测试(约半分钟)
 ```
 
 等价于:
@@ -31,7 +31,7 @@ uv run python scripts/verify.py --quick
 | 1 结构 | `uv run pytest tests/test_structure.py` | `src/`/`scripts/` 布局、脚本引导、任意目录可运行 | 秒 |
 | 2 数据 | `uv run python scripts/prepare_data.py` | 官方划分方向、列、行数;`--fix-swap` 可修复反向 | 秒 |
 | 3 静态 | `uv run ruff check` | 未定义名称、语法、导入错误 | 秒 |
-| 4 单元/集成 | `uv run pytest -q` | 合成数据上的端到端流程(CPU) | 约 5 秒 |
+| 4 单元/集成 | `uv run pytest -q` | 合成数据上的端到端流程(CPU,121 个测试) | 约 20 秒 |
 | 5 冒烟 | `uv run python scripts/smoke_test.py` | 真实数据加载、三个骨干前向、PGD 约束、自适应攻击 | 约 1 分钟 |
 | 6 复现计划 | `uv run python scripts/run_experiments.py --dry-run` | 三个骨干的命令、路径、设备参数 | 秒 |
 | 7 真实运行 | `uv run python scripts/run_experiments.py --device cuda` | 表 3–5 的原始数据 | 数小时 |
@@ -52,12 +52,31 @@ uv run python scripts/verify.py --quick
 | epsilon 扫描 / ROC / 梯度遮蔽 | `scripts/analyze_extended.py` | `outputs/extended_analysis/*` |
 | 跨骨干迁移 | `scripts/evaluate_cross_backbone_transfer.py` | `outputs/transfer_matrix/*` |
 | 六种防御超参数 | 主运行内置 | `hyperparameters.csv` |
+| supported/unsupported 有效解 | `scripts/check_supportedness.py --tchebycheff-rho 0.1` | `<backbone>/supportedness.csv` |
+| Holm/BH 校正与效应量 | `scripts/enhance_significance.py` | `<backbone>/significance_enhanced.csv` |
+| bootstrap 前沿稳定性 | `scripts/bootstrap_dominance.py` | `outputs/tables/bootstrap_*.csv` |
+| 均值 vs 中位数 | `scripts/check_aggregation_robustness.py` | `outputs/tables/aggregation_robustness.csv` |
+| epsilon 敏感性 | `scripts/export_epsilon_sensitivity.py --attack pgd` | `outputs/tables/epsilon_sensitivity*` |
+| 论文表 3–7 导出 | `scripts/export_paper_tables.py` | `outputs/tables/paper_tables.md` + CSV |
+
+修订版主实验协议(官方划分 + 10 seeds + 50 步评测 PGD,三个骨干同参):
+
+```bash
+uv run python scripts/run_mlp.py --device cuda --save-checkpoints \
+  --seeds 7,13,21,42,100,11,23,37,59,89 --eval-attack-rows 20000 \
+  --epsilon-list 0.02,0.05,0.10,0.20 --eval-pgd-alpha-ratio 0.10 --eval-pgd-steps 50
+# run_cnn1d.py / run_ft_transformer.py 使用同样的参数
+uv run python scripts/pareto_selection.py --ref-attack pgd --ref-epsilon 0.10 \
+  --confidence-margin 1.0 --min-phi2 0.90 --min-phi4 0.60
+```
+
+修订版论文表格的数字快照与新旧对照见 [docs/results.md](results.md)。
 
 ## 4. 修订版验收标准
 
 - `make verify` 全绿;
 - 主运行 `run_summary.json` 中 `dataset_split.official_direction = true`;
-- `raw_results.csv` 至少有 5 个 seed,`std_results.csv` 非零(确实做了跨种子聚合);
+- `raw_results.csv` 至少有 5 个 seed(修订版为 10 个),`std_results.csv` 非零(确实做了跨种子聚合);
 - `check_outputs.py --require-analysis` 通过;
 - 论文表格中的每个数字都能在上述 CSV 中找到来源,不手工改写。
 

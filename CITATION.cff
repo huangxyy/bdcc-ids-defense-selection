@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this code or the associated results, please cite the paper below."
+title: "A Backbone-Conditioned Pareto Analysis Framework for Preference-Aware IDS Defense Selection"
+type: software
+license: MIT
+repository-code: "https://github.com/huangxyy/bdcc-ids-defense-selection"
+authors:
+  - family-names: Huang
+    given-names: Xiyuan
+  - family-names: Zhao
+    given-names: Na
+  - family-names: Zheng
+    given-names: Yi
+  - family-names: Su
+    given-names: Xin
+  - family-names: Zhao
+    given-names: Shuang
+  - family-names: Liao
+    given-names: Qingquan
+  - family-names: Tong
+    given-names: Yu
+preferred-citation:
+  type: article
+  title: "A Backbone-Conditioned Pareto Analysis Framework for Preference-Aware IDS Defense Selection"
+  authors:
+    - family-names: Huang
+      given-names: Xiyuan
+    - family-names: Zhao
+      given-names: Na
+    - family-names: Zheng
+      given-names: Yi
+    - family-names: Su
+      given-names: Xin
+    - family-names: Zhao
+      given-names: Shuang
+    - family-names: Liao
+      given-names: Qingquan
+    - family-names: Tong
+      given-names: Yu
+  journal: "Big Data and Cognitive Computing"
+  year: 2026

@@ -50,7 +50,8 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 
 The authoritative description of the experiment protocol is `README.md`
 (`README.zh-CN.md`); `docs/verification.md` maps each manuscript table/figure
-to the command that regenerates it.
+to the command that regenerates it, and `docs/results.md` is a checked-in
+snapshot of the reported numbers (Tables 3-7 plus the robustness evidence).
 
 ## Traceability
 
