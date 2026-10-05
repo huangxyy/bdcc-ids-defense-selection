@@ -89,6 +89,7 @@ def build_eval_config(bundle: dict, args) -> ExperimentConfig:
         "output_dir": args.output_dir,
         "device": args.device,
         "eval_attack_rows": args.eval_attack_rows,
+        "batch_size": args.batch_size,
         "eval_subset_seed": args.eval_subset_seed,
         "epsilon_list": args.epsilon_list,
         "eval_pgd_steps": args.eval_pgd_steps,
@@ -115,6 +116,8 @@ def main() -> int:
                         help="directory for the evaluation-only outputs")
     parser.add_argument("--device", default=None, help="auto, cpu, cuda, cuda:N or mps")
     parser.add_argument("--eval-attack-rows", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="evaluation batch size (does not change per-sample attacks)")
     parser.add_argument("--eval-subset-seed", type=int, default=None)
     parser.add_argument("--epsilon-list", type=_parse_floats, default=None)
     parser.add_argument("--eval-pgd-steps", type=int, default=None)

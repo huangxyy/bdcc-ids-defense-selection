@@ -9,6 +9,8 @@ data/cicids2017/
 # tracked so a fresh clone documents where artefacts will appear.
 outputs/*
 !outputs/README.md
+# Local backup of the experiment tree; regenerated on demand, never committed.
+outputs.zip
 
 # Python
 __pycache__/

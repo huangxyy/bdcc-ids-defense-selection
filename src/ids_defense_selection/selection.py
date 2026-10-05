@@ -26,6 +26,7 @@ import pandas as pd
 
 from . import style as FS
 from .config import DEFAULT_EPSILON_LIST
+from .mcda import compare_mcda_methods
 from .paths import (
     BACKBONE_OUTPUT_SUBDIRS,
     DEFAULT_OUTPUT_ROOT,
@@ -424,12 +425,16 @@ def compare_decision_methods(means: pd.DataFrame, stds: pd.DataFrame, margin: fl
     names = means.index.tolist()
     matrix = means[OBJECTIVE_COLUMNS].values
     front = _pareto_front(means, stds, margin)
+    point_front = means[is_pareto_optimal(matrix)] if names else means
     rows = []
     for name, theta in presets.items():
         rows.append({
             "theta_name": name,
             "theta_values": str(theta),
             "pareto_weighted": _pareto_weighted_selection(means, stds, margin, theta) or "N/A",
+            "pareto_point_weighted": (select_defense(point_front[OBJECTIVE_COLUMNS].values,
+                                                     point_front.index.tolist(), theta)
+                                      if not point_front.empty else "N/A"),
             "weighted_no_pareto": select_defense(matrix, names, theta) if names else "N/A",
             "weighted_fixed01": select_defense(matrix, names, theta, normalise="fixed01") if names else "N/A",
             "topsis_no_pareto": select_topsis(matrix, names, theta) if names else "N/A",
@@ -439,7 +444,11 @@ def compare_decision_methods(means: pd.DataFrame, stds: pd.DataFrame, margin: fl
             "n_candidates": len(names),
             "pareto_size": int(len(front)),
         })
-    return pd.DataFrame(rows)
+    table = pd.DataFrame(rows)
+    if not means.empty:
+        table = table.merge(compare_mcda_methods(means, presets), on="theta_name",
+                            how="left")
+    return table
 
 
 def candidate_dependence_table(means: pd.DataFrame, stds: pd.DataFrame, margin: float,

@@ -82,9 +82,12 @@ What the revision adds beyond the submitted manuscript:
   (the submitted 6 -> 5 -> 4 contraction does not survive). After the admissibility floors, the
   admissible fronts contain 5 / 4 / 5 candidates.
 - **Sensitivity and robustness analyses.** Preference-simplex sweep with exact switching
-  hyperplanes, admissibility threshold sweep, leave-one-out candidate perturbation, TOPSIS and
-  fixed-[0, 1] normalization comparators, bootstrap front-membership probabilities, and
-  mean-versus-median aggregation.
+  hyperplanes, admissibility threshold sweep, leave-one-out candidate perturbation, and
+  comparisons against weighted sum without Pareto filtering, TOPSIS, fixed-[0, 1]
+  normalization, NSGA-II, MOEA/D and AHP. On the six discrete candidates NSGA-II and MOEA/D
+  recover the enumerated Pareto front and both reproduce the deterministic weighted selection
+  in all 12 preset cells; AHP recovers the preset weights to machine precision. TOPSIS and the
+  normalization variants are the comparators that actually change recommendations.
 - **Weighted-sum limitations.** The constrained PGD-AT on the MLP and TRADES on the
   FT-Transformer are *unsupported* Pareto points: no non-negative preference vector reaches them
   under the weighted sum. Both become reachable under an augmented weighted Tchebycheff rule with

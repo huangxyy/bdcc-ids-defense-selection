@@ -76,7 +76,9 @@ flowchart LR
   全部六个候选；而点估计前沿在 FT-Transformer 上排除 TRADES（投稿版 6 -> 5 -> 4 的收缩
   并不成立）。施加准入门槛后，可准入前沿分别为 5 / 4 / 5 个候选。
 - **敏感性与稳健性分析。** 偏好单纯形扫描与精确切换超平面、准入门槛扫描、leave-one-out
-  候选扰动、TOPSIS 与 fixed-[0, 1] 归一化对照、bootstrap 前沿稳定性概率、均值/中位数对比。
+  候选扰动，以及无 Pareto 加权和、TOPSIS、fixed-[0, 1] 归一化、NSGA-II、MOEA/D、AHP 的对照。
+  在 6 个离散候选上，NSGA-II 与 MOEA/D 都能恢复枚举出的帕累托前沿，且在全部 12 个预设单元中
+  与确定性加权选择一致；AHP 能把预设权重恢复到机器精度。真正改变推荐的是 TOPSIS 与归一化变体。
 - **加权和的数学局限。** MLP 的 Constrained PGD-AT 与 FT-Transformer 的 TRADES 是
   *unsupported* 有效解：在加权和规则下不存在任何非负权重向量能选中它们；改用增广加权
   Tchebycheff 规则（增广系数 0.1）后二者可达。

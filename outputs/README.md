@@ -37,7 +37,7 @@ write the same layout under `outputs/<backbone>/` (`mlp/`, `cnn1d/`,
 |---|---|---|
 | `outputs/figures/` | `scripts/pareto_selection.py` | Pareto front, risk surface, epsilon evolution, theta sensitivity |
 | `outputs/<backbone>/risk_profile_4d.csv` | `scripts/pareto_selection.py` | phi1–phi4, per-objective std, Pareto and admissibility verdicts |
-| `outputs/<backbone>/decision_comparators.csv` | `scripts/pareto_selection.py` | Pareto+weighted vs weighted-only vs TOPSIS, plus the fixed-[0,1] normalisation variant |
+| `outputs/<backbone>/decision_comparators.csv` | `scripts/pareto_selection.py` | Pareto+weighted vs weighted-only, TOPSIS, fixed-[0,1] normalisation, NSGA-II, MOEA/D and AHP |
 | `outputs/<backbone>/candidate_dependence.csv` | `scripts/pareto_selection.py` | leave-one-out test of the Eq. 7 candidate-set dependence |
 | `outputs/<backbone>/theta_sweep.csv` | `scripts/pareto_selection.py` | recommendation for every preference vector on the simplex (step `--theta-step`) |
 | `outputs/<backbone>/theta_summary.csv` | `scripts/pareto_selection.py` | share of the preference simplex each defense owns |

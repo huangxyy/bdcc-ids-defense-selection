@@ -204,16 +204,53 @@ Supporting files: `outputs/tables/bootstrap_front_stability.csv`,
 `cross_dataset_comparison_10seed.csv`, `capacity_ablation.csv`, `capacity_large_2seed.csv`,
 `adaptive_3seed.csv`, `longbudget_comparison.csv`, and `<backbone>/supportedness.csv`.
 
+### Decision-method comparison, including NSGA-II / MOEA/D / AHP
+
+`<backbone>/decision_comparators.csv` now compares the proposed rule with eight alternatives on
+the same admissible candidate set: weighted sum without Pareto filtering, TOPSIS (with and
+without the Pareto step), fixed-[0, 1] normalization, **NSGA-II**, **MOEA/D** (weighted
+Tchebycheff, 165 weight vectors) and **AHP** (principal-eigenvector weights from the pairwise
+matrix implied by each preset).
+
+| Method | Preset cells differing from the proposed rule | Note |
+|---|---|---|
+| Weighted sum without Pareto | 0 / 12 | the Pareto step does not change the four presets |
+| TOPSIS (no Pareto) | 4 / 12 | MLP 1, 1D-CNN 2, FT 1 |
+| fixed-[0, 1] normalization | 4 / 12 | MLP 1, 1D-CNN 1, FT 2 |
+| NSGA-II | 0 / 12 vs the deterministic front | recovers the enumerated front on all three backbones |
+| MOEA/D | 0 / 12 vs the deterministic front | recovers the same front, including unsupported points |
+| AHP | 0 / 12 vs the deterministic front | recovers the preset weights to ~1e-16 |
+
+Interpretation: for six discrete candidates a multi-objective evolutionary search has nothing
+to search — NSGA-II and MOEA/D re-derive the enumerated front, and AHP is an elicitation method
+that returns the preset weights. The comparators that genuinely change recommendations are
+TOPSIS and the normalization variant, which is why the manuscript reports those. The only
+difference between the uncertainty-aware rule and the deterministic rule is FT Clean
+(Free AT vs Constrained), caused by TRADES entering the Eq. (4) front and rescaling the
+min-max normalization — the candidate-set dependence documented in Section 6.
+
 ---
 
 ## 7. Coverage and data-quality notes
 
-### Full-test attack coverage (MLP)
+### Full-test attack coverage (all three backbones)
 
-The 1D-CNN and FT-Transformer main runs write `full_test_attack_{raw,mean,std}.csv`
-(PGD at epsilon = 0.10, all 82,332 test records, ten seeds). The MLP pipeline historically
-evaluated only the 20,000-row subset, so the revision closes that gap from the saved checkpoints,
-without retraining, using the identical protocol:
+All three backbones now report `full_test_attack_{raw,mean,std}.csv` for PGD at epsilon = 0.10
+over all 82,332 test records and ten seeds: the 1D-CNN and FT-Transformer main runs write the
+files directly, and the MLP run was completed from the saved checkpoints without retraining.
+For the CPU-only local run the evaluation batch size was raised to 4096 to bound the wall time;
+PGD is a per-sample attack, and the results agree with the 20,000-row subset protocol:
+
+| Defense | MLP full-test ASR | MLP 20k-subset ASR | MLP full-test F1 |
+|---|---|---|---|
+| StdTrain | 15.87% +/- 1.03 | 15.82% | 0.7687 |
+| PGD-AT | 0.30% +/- 0.11 | 0.33% | 0.8552 |
+| Constrained | 3.61% +/- 2.13 | 3.63% | 0.8369 |
+| TRADES | 0.18% +/- 0.04 | 0.21% | 0.8555 |
+| Free AT | 8.01% +/- 2.12 | 7.91% | 0.8226 |
+| Class-Aware | 1.05% +/- 0.29 | 1.03% | 0.8513 |
+
+Reproduction (checkpoint-based, identical protocol; add `--batch-size 4096` for a CPU run):
 
 ```bash
 for s in 7 13 21 42 100 11 23 37 59 89; do
@@ -226,7 +263,7 @@ for s in 7 13 21 42 100 11 23 37 59 89; do
 done
 ```
 
-Concatenate the per-seed `full_test_attack_raw.csv` files, then aggregate over seeds
+Concatenate the per-seed `full_test_attack_raw.csv` files under `outputs/mlp_fulltest/`, then aggregate over seeds
 (the files already carry `seed`, `model`, `attack`, `epsilon` and `test_rows`):
 
 ```python
